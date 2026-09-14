@@ -43,7 +43,7 @@ export default async function SegmentsPage() {
       <PageHeader
         title="Segments"
         description="Who you are talking to. A segment is a live rule, not a frozen list — it re-counts every time you use it."
-        action={canManage ? <SegmentBuilder /> : null}
+        action={canManage ? <SegmentBuilder branches={session?.branches ?? []} /> : null}
       />
 
       {segments.length === 0 ? (

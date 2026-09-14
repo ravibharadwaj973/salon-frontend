@@ -72,6 +72,9 @@ export interface SessionUser {
    * which is what this person may do. A screen needs both.
    */
   features?: string[];
+  /** The salon may read everything and save nothing — account switched off. */
+  readOnly?: boolean;
+  readOnlyReason?: string | null;
   staffId: string | null;
 }
 

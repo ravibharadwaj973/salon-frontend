@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChevronDown, LogOut, Menu, Search, X } from 'lucide-react';
+import { Bell, ChevronDown, Lock, LogOut, Menu, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { visibleNav } from './nav';
 import { Avatar } from '@/components/ui/display';
@@ -211,6 +211,23 @@ export function AppShell({
             ) : null}
           </Link>
         </header>
+
+        {user.readOnly ? (
+          /*
+           * Said once, at the top, on every screen — because the alternative is
+           * a receptionist filling in a whole bill and meeting a 403 on save.
+           */
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 sm:px-6">
+            <p className="flex items-start gap-2 text-xs leading-relaxed text-amber-900">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                <span className="font-medium">This account is switched off.</span>{' '}
+                {user.readOnlyReason ??
+                  'Nothing new can be saved. Everything already here is still yours to read and export.'}
+              </span>
+            </p>
+          </div>
+        ) : null}
 
         <main className="min-w-0 flex-1 p-4 sm:p-6">{children}</main>
       </div>
