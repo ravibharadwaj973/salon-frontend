@@ -2,7 +2,7 @@ import 'server-only';
 import { getAccessToken, getActiveBranchId } from './session';
 import type { ApiErrorBody, Envelope, PageMeta } from './types';
 
-export const API_URL = process.env.API_URL ?? 'http://localhost:4000/api/v1';
+export const API_URL = process.env.API_URL ?? 'https://api.jharavi.in/api/v1';
 
 export class ApiError extends Error {
   constructor(
