@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CreditCard, ExternalLink, Phone, Receipt, User } from 'lucide-react';
+import { CalendarClock, CreditCard, ExternalLink, Globe, Phone, Receipt, User } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Avatar, Badge, StatusBadge } from '@/components/ui/display';
@@ -11,6 +11,18 @@ import { ConfirmDialog, Modal, useToast } from '@/components/ui/overlay';
 import { Input, Field } from '@/components/ui/form';
 import { date as fmtDate, duration, fullName, money, phone as formatPhone, time } from '@/lib/format';
 import type { Appointment, AppointmentStatus } from '@/lib/types';
+
+/** How a customer-made booking reached the diary, in words an owner would use. */
+const BOOKING_SOURCE: Record<string, string> = {
+  ONLINE: 'your booking page',
+  QR: 'a QR code',
+  WHATSAPP: 'WhatsApp',
+  INSTAGRAM: 'Instagram',
+  APP: 'the app',
+  PHONE: 'a phone call',
+  IMPORT: 'an import',
+};
+
 
 /** Which moves make sense next, mirroring the API's own state machine. */
 const NEXT_STATUS: Partial<Record<AppointmentStatus, { status: AppointmentStatus; label: string }[]>> = {
@@ -158,6 +170,20 @@ export function AppointmentDrawer({
                 ) : null}
               </div>
             </div>
+
+            {/* Where this booking came from. Only shown when the customer booked
+                themselves — a walk-in taken at the desk needs no explanation. */}
+            {appointment.source !== 'RECEPTION' && appointment.source !== 'WALK_IN' ? (
+              <p className="flex items-center gap-1.5 text-2xs text-ink-subtle">
+                <Globe className="h-3 w-3" />
+                Booked by the customer via {BOOKING_SOURCE[appointment.source] ?? appointment.source.toLowerCase()}
+                {appointment.sourceRef ? (
+                  <span className="rounded-full bg-stone-100 px-1.5 py-0.5 font-medium text-ink-muted">
+                    {appointment.sourceRef}
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
 
             {appointment.customer ? (
               <div className="tnum grid grid-cols-3 gap-2 rounded-lg bg-stone-50 p-3 text-center">

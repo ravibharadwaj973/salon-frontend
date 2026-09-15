@@ -1,5 +1,6 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
-import { apiFetch } from '@/lib/api';
+import { apiFetchAllowed } from '@/lib/api';
 import { PageHeader } from '@/components/ui/display';
 import { AutomationList } from './automation-list';
 import type { Automation } from '@/lib/types';
@@ -9,7 +10,11 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Automations' };
 
 export default async function AutomationsPage() {
-  const automations = await apiFetch<Automation[]>('/messaging/automations');
+  const automations = await apiFetchAllowed<Automation[]>('/messaging/automations');
+
+  if (!automations) {
+    return <PermissionGate permission="journey.manage" what="Automations are restricted." />;
+  }
 
   return (
     <>

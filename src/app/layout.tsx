@@ -4,15 +4,19 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Salon OS',
-    template: '%s · Salon OS',
+    default: 'Parlon',
+    template: '%s · Parlon',
   },
   description: 'Run the entire salon and bring customers back automatically.',
+  applicationName: 'Parlon',
+  manifest: '/manifest.webmanifest',
+  // Added to a home screen, it should say Parlon and open without browser chrome.
+  appleWebApp: { capable: true, title: 'Parlon', statusBarStyle: 'default' },
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#B03A6B',
+  themeColor: '#EA580C',
   width: 'device-width',
   initialScale: 1,
 };

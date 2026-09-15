@@ -278,7 +278,7 @@ function Column({
   return (
     <div className="w-[190px] shrink-0 border-r border-stone-200 last:border-r-0">
       <div className="sticky top-0 z-10 flex h-11 items-center gap-2 border-b border-stone-200 bg-white px-3">
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: column.colorHex ?? '#B03A6B' }} />
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: column.colorHex ?? '#EA580C' }} />
         <span className="truncate text-xs font-medium text-ink">{column.label}</span>
         <span className="ml-auto text-2xs text-ink-subtle">{column.appointments.length}</span>
       </div>

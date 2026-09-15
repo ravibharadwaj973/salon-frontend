@@ -1,3 +1,4 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -17,7 +18,7 @@ import {
   Sparkles,
   Star,
 } from 'lucide-react';
-import { ApiError, apiFetch, apiFetchList, apiFetchSafe } from '@/lib/api';
+import { ApiError, apiFetch, apiFetchAllowed, apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Avatar, Badge, Card, CardBody, CardHeader, EmptyState, StatusBadge } from '@/components/ui/display';
 import { ButtonLink } from '@/components/ui/button';
 import { CustomerNotes } from './customer-notes';
@@ -69,12 +70,23 @@ const SOURCE_LABEL: Record<string, string> = {
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  let customer: CustomerProfile;
+  let customer: CustomerProfile | null;
   try {
-    customer = await apiFetch<CustomerProfile>(`/customers/${id}`);
+    customer = await apiFetchAllowed<CustomerProfile>(`/customers/${id}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
+  }
+
+  if (!customer) {
+    return (
+      <PermissionGate
+        permission="customer.view"
+        what="Customer records are restricted."
+        backHref="/customers"
+        backLabel="All customers"
+      />
+    );
   }
 
   const shows = (key: ProfileSectionKey) => customer.sections?.includes(key) ?? true;

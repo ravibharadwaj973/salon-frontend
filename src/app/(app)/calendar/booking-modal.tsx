@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Clock, Search, UserPlus } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Search, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { apiList, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
@@ -94,21 +94,62 @@ export function BookingModal({
     enabled: serviceIds.length > 0 && Boolean(branchId),
   });
 
+  /**
+   * The free times to offer, for the chosen stylist or for anyone.
+   *
+   * The diary now returns a stylist's whole day, taken times included, so this
+   * keeps only what is actually free — the heading says "Free slots" and it
+   * should stay true. With nobody chosen it merges the team rather than
+   * showing whichever stylist happened to come back first.
+   */
   const slotList = useMemo(() => {
     if (!slots) return [];
-    const group = staffId ? slots.find((s) => s.staffId === staffId) : slots[0];
-    return group?.slots ?? [];
+
+    if (staffId) {
+      return slots.find((group) => group.staffId === staffId)?.slots.filter((slot) => slot.available) ?? [];
+    }
+
+    const byTime = new Map<string, { start: string; end: string; label: string; available: boolean }>();
+    for (const group of slots) {
+      for (const slot of group.slots) {
+        if (slot.available && !byTime.has(slot.label)) byTime.set(slot.label, slot);
+      }
+    }
+    return [...byTime.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [slots, staffId]);
 
   useEffect(() => {
     if (defaultStartAt) setStartTime(dayjs(defaultStartAt).format('HH:mm'));
   }, [defaultStartAt]);
 
+  /**
+   * Whether the time in the box is already full.
+   *
+   * Read from the same slot data the buttons below are drawn from, so the
+   * warning and the greyed-out time always agree.
+   *
+   *   'free'    someone can take it
+   *   'full'    every stylist who could do this work is busy then
+   *   'unknown' no opinion — no services picked yet, or a time typed by hand
+   *             that is not on the grid. The server decides those.
+   */
+  const timeState: 'free' | 'full' | 'unknown' = useMemo(() => {
+    if (!slots || serviceIds.length === 0 || !startTime) return 'unknown';
+
+    const groups = staffId ? slots.filter((group) => group.staffId === staffId) : slots;
+    const matching = groups.flatMap((group) => group.slots).filter((slot) => slot.label === startTime);
+
+    if (matching.length === 0) return 'unknown';
+    return matching.some((slot) => slot.available) ? 'free' : 'full';
+  }, [slots, serviceIds, staffId, startTime]);
+
+  const full = timeState === 'full';
+
   function toggleService(id: string) {
     setServiceIds((current) => (current.includes(id) ? current.filter((s) => s !== id) : [...current, id]));
   }
 
-  async function submit() {
+  async function submit(force = false) {
     setError(null);
 
     if (!customer && !walkIn.name.trim()) {
@@ -131,6 +172,7 @@ export function BookingModal({
           phone: walkIn.phone.trim() || undefined,
           services: serviceIds.map((serviceId) => ({ serviceId, staffId: staffId || undefined })),
           startAt,
+          force,
         });
       } else {
         await apiPost('appointments', {
@@ -142,6 +184,7 @@ export function BookingModal({
           source: 'RECEPTION',
           notes: notes.trim() || undefined,
           services: serviceIds.map((serviceId) => ({ serviceId, staffId: staffId || undefined })),
+          force,
         });
       }
 
@@ -164,7 +207,12 @@ export function BookingModal({
       footer={
         <>
           <div className="mr-auto text-xs text-ink-muted">
-            {selected.length > 0 ? (
+            {full ? (
+              <span className="flex items-center gap-1.5 font-medium text-amber-700">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Fully booked at {startTime} — this will overbook
+              </span>
+            ) : selected.length > 0 ? (
               <span className="tnum">
                 {selected.length} service{selected.length === 1 ? '' : 's'} · {duration(totalMinutes)} · {money(totalPrice)}
               </span>
@@ -175,8 +223,10 @@ export function BookingModal({
           <Button variant="secondary" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={submit} loading={saving}>
-            Book appointment
+          {/* Full does not mean forbidden. The desk can always overbook — but
+              it has to be a decision, not a click that looks like any other. */}
+          <Button onClick={() => submit(full)} loading={saving} variant={full ? 'secondary' : 'primary'}>
+            {full ? 'Book anyway' : 'Book appointment'}
           </Button>
         </>
       }

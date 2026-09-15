@@ -130,7 +130,7 @@ export function Avatar({
   className?: string;
 }) {
   const dims = { xs: 'h-6 w-6 text-2xs', sm: 'h-8 w-8 text-xs', md: 'h-10 w-10 text-sm', lg: 'h-14 w-14 text-lg' }[size];
-  const background = id ? colorFor(id) : '#B03A6B';
+  const background = id ? colorFor(id) : '#EA580C';
 
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element

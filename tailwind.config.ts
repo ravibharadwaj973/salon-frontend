@@ -1,10 +1,12 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Salon OS design tokens.
+ * Parlon design tokens.
  *
- * Warm neutrals (stone) rather than cold greys, with a plum-rose accent — a
- * salon is not a bank. Semantic colours are kept few on purpose: brand for
+ * The colour tokens here are the marketing site's, value for value — brand,
+ * canvas and ink. One palette across the website, the salon app and the
+ * console, so a salon that decides on the pricing page and then signs in is
+ * looking at the same product rather than two that share a name. Semantic colours are kept few on purpose: brand for
  * action, emerald for money in, rose for money out or danger, amber for
  * attention.
  */
@@ -14,23 +16,23 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: '#FDF2F6',
-          100: '#FCE7EF',
-          200: '#FACFDF',
-          300: '#F5A8C4',
-          400: '#EC739F',
-          500: '#DE4680',
-          600: '#B03A6B',
-          700: '#8E2D56',
-          800: '#762748',
-          900: '#63243E',
+          50: '#fff7ed',
+          100: '#ffedd5',
+          200: '#fed7aa',
+          300: '#fdba74',
+          400: '#fb923c',
+          500: '#f97316',
+          600: '#ea580c',
+          700: '#c2410c',
+          800: '#9a3412',
+          900: '#7c2d12',
         },
+        canvas: '#fdfaf6',
         ink: {
-          DEFAULT: '#1C1917',
-          muted: '#78716C',
-          subtle: '#A8A29E',
+          DEFAULT: '#1c1917',
+          muted: '#57534e',
+          subtle: '#a8a29e',
         },
-        canvas: '#FAFAF9',
       },
       fontFamily: {
         sans: [
@@ -49,7 +51,8 @@ const config: Config = {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
       boxShadow: {
-        card: '0 1px 2px 0 rgb(28 25 23 / 0.04), 0 1px 3px 0 rgb(28 25 23 / 0.06)',
+        // The marketing site's card shadow, value for value.
+        card: '0 1px 2px 0 rgb(28 25 23 / 0.04), 0 8px 24px -12px rgb(28 25 23 / 0.10)',
         pop: '0 10px 30px -10px rgb(28 25 23 / 0.20)',
       },
       keyframes: {

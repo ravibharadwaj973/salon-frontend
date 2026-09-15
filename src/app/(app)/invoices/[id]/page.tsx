@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { ApiError, apiFetch } from '@/lib/api';
+import { ApiError, apiFetch, apiFetchAllowed } from '@/lib/api';
 import { Card, CardBody, CardHeader, StatusBadge } from '@/components/ui/display';
+import { PermissionGate } from '@/components/permission-gate';
 import { InvoiceActions } from './invoice-actions';
 import { RemovePaymentButton } from './remove-payment-button';
 import { date, fullName, money, moneyExact, phone as formatPhone, time } from '@/lib/format';
@@ -23,12 +24,26 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  let invoice: Invoice;
+  // Three different answers, three different screens: a bill that is not there
+  // is notFound(), a bill this person may not read is a plain refusal, and
+  // anything else is a real fault and belongs at the error boundary.
+  let invoice: Invoice | null;
   try {
-    invoice = await apiFetch<Invoice>(`/invoices/${id}`);
+    invoice = await apiFetchAllowed<Invoice>(`/invoices/${id}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
+  }
+
+  if (!invoice) {
+    return (
+      <PermissionGate
+        permission="invoice.view"
+        what="Bills are restricted."
+        backHref="/"
+        backLabel="Back to the dashboard"
+      />
+    );
   }
 
   const user = await apiFetch<SessionUser>('/auth/me', { noBranch: true });

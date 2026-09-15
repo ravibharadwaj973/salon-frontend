@@ -1,8 +1,9 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, CalendarClock, Clock, Sparkles, Star, Wallet } from 'lucide-react';
-import { ApiError, apiFetch, apiFetchList, apiFetchSafe } from '@/lib/api';
+import { ApiError, apiFetch, apiFetchAllowed, apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Avatar, Badge, Card, CardBody, CardHeader, StatTile, StatusBadge } from '@/components/ui/display';
 import { date, dayjs, money, percent, phone as formatPhone, time } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/permissions';
@@ -69,12 +70,23 @@ export default async function StaffMemberPage({
   const from = query.from ?? dayjs().startOf('month').format('YYYY-MM-DD');
   const to = query.to ?? dayjs().format('YYYY-MM-DD');
 
-  let staff: Staff;
+  let staff: Staff | null;
   try {
-    staff = await apiFetch<Staff>(`/staff/${id}`);
+    staff = await apiFetchAllowed<Staff>(`/staff/${id}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
+  }
+
+  if (!staff) {
+    return (
+      <PermissionGate
+        permission="staff.view"
+        what="Team records are restricted."
+        backHref="/staff"
+        backLabel="All team members"
+      />
+    );
   }
 
   const shows = (key: string) => staff.sections?.includes(key) ?? true;

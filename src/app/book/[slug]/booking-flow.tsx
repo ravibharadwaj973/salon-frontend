@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronLeft, Clock, PartyPopper, Scissors, User } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -48,15 +48,31 @@ export function BookingFlow({
   salonName,
   branches,
   menu,
+  embedded = false,
+  preselect,
 }: {
   slug: string;
   salonName: string;
   branches: Branch[];
   menu: { id: string; name: string; services: Service[] }[];
+  /** Rendered inside an iframe on the salon's own website. */
+  embedded?: boolean;
+  preselect?: { branchId?: string; serviceId?: string; ref?: string };
 }) {
   const [step, setStep] = useState<Step>('services');
-  const [branchId, setBranchId] = useState(branches[0]?.id ?? '');
-  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  // A preselected branch or service only counts if the salon really has it —
+  // a stale link on their website should start the customer at the beginning,
+  // not on an empty screen.
+  const [branchId, setBranchId] = useState(
+    (preselect?.branchId && branches.some((b) => b.id === preselect.branchId) ? preselect.branchId : null) ??
+      branches[0]?.id ??
+      '',
+  );
+  const [serviceIds, setServiceIds] = useState<string[]>(() => {
+    const wanted = preselect?.serviceId;
+    if (!wanted) return [];
+    return menu.some((group) => group.services.some((service) => service.id === wanted)) ? [wanted] : [];
+  });
   const [staffId, setStaffId] = useState<string>('');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [slot, setSlot] = useState<string | null>(null);
@@ -64,6 +80,39 @@ export function BookingFlow({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Talking to the salon's page.
+   *
+   * Only meaningful when embedded, and deliberately one-way: we tell the host
+   * page how tall we are and that a booking happened, and we accept nothing
+   * back. `'*'` as the target is fine because nothing here is a secret — the
+   * host already knows its own height, and the appointment id is not a
+   * credential — while a real target origin would mean asking every salon to
+   * configure their domain.
+   */
+  function post(message: Record<string, unknown>) {
+    if (!embedded || typeof window === 'undefined' || window.parent === window) return;
+    window.parent.postMessage({ source: 'parlon', ...message }, '*');
+  }
+
+  // Report our height so the iframe can grow with the flow instead of scrolling
+  // inside a fixed box. ResizeObserver rather than a timer: the height changes
+  // when a step changes, not on a schedule.
+  useEffect(() => {
+    if (!embedded) return;
+    const node = rootRef.current;
+    if (!node) return;
+
+    const report = () => post({ type: 'height', height: Math.ceil(node.getBoundingClientRect().height) + 40 });
+    report();
+
+    const observer = new ResizeObserver(report);
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded]);
 
   const allServices = useMemo(() => menu.flatMap((group) => group.services), [menu]);
   const selected = allServices.filter((service) => serviceIds.includes(service.id));
@@ -91,12 +140,18 @@ export function BookingFlow({
   const slots = useMemo(() => {
     if (!slotGroups) return [];
     if (staffId) return slotGroups.find((group) => group.staffId === staffId)?.slots ?? [];
-    // "Anyone" — merge every stylist's openings and de-duplicate by start time.
-    const seen = new Map<string, { start: string; label: string }>();
+    // "Anyone" — merge every stylist's day and de-duplicate by time. A time is
+    // free if ANY stylist is free then, so a taken entry is replaced the moment
+    // a free one turns up; taking the first would grey out times the salon can
+    // actually sell just because one stylist happens to be busy.
+    const seen = new Map<string, { start: string; label: string; available: boolean }>();
     for (const group of slotGroups) {
-      for (const item of group.slots) if (!seen.has(item.label)) seen.set(item.label, item);
+      for (const item of group.slots) {
+        const current = seen.get(item.label);
+        if (!current || (!current.available && item.available)) seen.set(item.label, item);
+      }
     }
-    return [...seen.values()].sort((a, b) => a.start.localeCompare(b.start));
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [slotGroups, staffId]);
 
   function toggleService(id: string) {
@@ -125,11 +180,19 @@ export function BookingFlow({
         services: serviceIds.map((serviceId) => ({ serviceId, staffId: staffId || undefined })),
         notes: details.notes.trim() || undefined,
         source: 'ONLINE',
+        ref: preselect?.ref,
         marketingConsent: details.consent,
       });
 
       setConfirmation(result);
       setStep('done');
+      // Tell the salon's own page, so it can fire its own analytics or show a
+      // thank-you of its own. We send the appointment, never the customer's
+      // details — those are not the host page's to read.
+      post({
+        type: 'booked',
+        appointment: { id: result.appointmentId, startAt: result.startAt, branch: result.branch.name },
+      });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -140,7 +203,7 @@ export function BookingFlow({
   // ------------------------------------------------------------ confirmed ---
   if (step === 'done' && confirmation) {
     return (
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
+      <div ref={rootRef} className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
         <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
           <PartyPopper className="h-5 w-5 text-emerald-600" />
         </span>
@@ -189,7 +252,7 @@ export function BookingFlow({
   const currentIndex = steps.findIndex((item) => item.key === step);
 
   return (
-    <div>
+    <div ref={rootRef}>
       {/* Progress */}
       <ol className="mb-5 flex items-center gap-1.5">
         {steps.map((item, index) => (
@@ -382,30 +445,39 @@ export function BookingFlow({
 
             {loadingSlots ? (
               <p className="py-8 text-center text-sm text-ink-subtle">Checking availability…</p>
-            ) : slots.length === 0 ? (
+            ) : !slots.some((item) => item.available) ? (
               <div className="rounded-xl bg-stone-50 py-8 text-center">
                 <Clock className="mx-auto mb-2 h-5 w-5 text-ink-subtle" />
                 <p className="text-sm text-ink">Nothing free on this day</p>
                 <p className="mt-1 text-xs text-ink-muted">Try another date, or choose &ldquo;anyone available&rdquo;.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-                {slots.map((item) => (
-                  <button
-                    key={item.start}
-                    type="button"
-                    onClick={() => setSlot(item.start)}
-                    className={cn(
-                      'tnum rounded-lg border py-2 text-xs font-medium transition-colors',
-                      slot === item.start
-                        ? 'border-brand-600 bg-brand-600 text-white'
-                        : 'border-stone-200 text-ink hover:border-brand-300',
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                  {slots.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      disabled={!item.available}
+                      title={item.available ? undefined : 'Already booked'}
+                      onClick={() => setSlot(item.start)}
+                      className={cn(
+                        'tnum rounded-lg border py-2 text-xs font-medium transition-colors',
+                        !item.available
+                          ? 'cursor-not-allowed border-stone-200 bg-stone-100 text-ink-subtle line-through'
+                          : slot === item.start
+                            ? 'border-brand-600 bg-brand-600 text-white'
+                            : 'border-stone-200 text-ink hover:border-brand-300',
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                {slots.some((item) => !item.available) ? (
+                  <p className="mt-2 text-2xs text-ink-subtle">Crossed-out times are already booked.</p>
+                ) : null}
+              </>
             )}
           </>
         ) : null}

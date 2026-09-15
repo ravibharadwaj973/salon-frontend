@@ -7,6 +7,7 @@ import { Bell, ChevronDown, Lock, LogOut, Menu, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { visibleNav } from './nav';
 import { Avatar } from '@/components/ui/display';
+import { ParlonLogo } from '@/components/brand/parlon-logo';
 import { ROLE_LABEL } from '@/lib/permissions';
 import type { SessionUser } from '@/lib/types';
 
@@ -56,9 +57,7 @@ export function AppShell({
   const sidebar = (
     <nav className="flex h-full flex-col">
       <div className="flex h-14 items-center gap-2 border-b border-stone-200 px-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">
-          S
-        </span>
+        <ParlonLogo className="h-7 w-7 shrink-0" />
         <span className="truncate text-sm font-semibold tracking-tight text-ink">{user.tenant.name}</span>
       </div>
 

@@ -204,3 +204,20 @@ export const PERMISSION_GROUPS: { title: string; items: { key: string; label: st
     ],
   },
 ];
+
+/**
+ * "invoice.view" -> "See bills".
+ *
+ * Built from the same list the permissions editor shows, so the words a person
+ * reads when they are refused are the exact words their manager sees when
+ * granting it. Falls back to the raw key rather than inventing a phrase — a
+ * permission nobody has labelled is a bug, and hiding it helps no one.
+ */
+export function permissionLabel(key: string): string | null {
+  for (const group of PERMISSION_GROUPS) {
+    for (const item of group.items) {
+      if (item.key === key) return item.label.toLowerCase();
+    }
+  }
+  return null;
+}

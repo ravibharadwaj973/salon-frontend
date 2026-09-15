@@ -1,8 +1,9 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { ApiError, apiFetch, apiFetchList } from '@/lib/api';
+import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Badge, Card, CardBody, CardHeader, EmptyState, StatTile, StatusBadge } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { count, dateTime, fullName, money, percent } from '@/lib/format';
@@ -33,12 +34,23 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  let campaign: Campaign;
+  let campaign: Campaign | null;
   try {
-    campaign = await apiFetch<Campaign>(`/campaigns/${id}`);
+    campaign = await apiFetchAllowed<Campaign>(`/campaigns/${id}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
+  }
+
+  if (!campaign) {
+    return (
+      <PermissionGate
+        permission="campaign.view"
+        what="Campaigns are restricted."
+        backHref="/campaigns"
+        backLabel="All campaigns"
+      />
+    );
   }
 
   const messages = await apiFetchList<MessageRow>(`/campaigns/${id}/messages`, { query: { pageSize: 50 } }).catch(

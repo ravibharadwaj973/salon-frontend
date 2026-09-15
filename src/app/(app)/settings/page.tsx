@@ -8,9 +8,12 @@ import { NewUserButton } from './new-user-button';
 import { ProfileLayoutEditor } from './profile-layout-editor';
 import { BillingDefaultsCard } from './billing-defaults-card';
 import { GoogleReviewCard } from './google-review-card';
+import { BookingEmbedCard } from './booking-embed-card';
+import { BookingCapacityCard } from './booking-capacity-card';
 import { UserPermissionsButton } from './user-permissions-button';
 import { date, fromNow, phone as formatPhone } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/permissions';
+import { bookingPageUrl, embedScriptUrl } from '@/lib/public-urls';
 import type { BranchSummary, PageLayout, SessionUser, UserRole } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Settings' };
@@ -41,6 +44,7 @@ interface Branch extends BranchSummary {
   isActive: boolean;
   invoicePrefix: string;
   googleReviewUrl: string | null;
+  maxConcurrentBookings: number | null;
   _count?: { staff: number; resources: number };
 }
 
@@ -121,29 +125,23 @@ export default async function SettingsPage({
           </Card>
 
           <div className="space-y-5">
-            <Card>
-              <CardHeader title="Public booking page" subtitle="Share this link, or print it as a QR code" />
-              <CardBody>
-                {tenant ? (
-                  <>
-                    <code className="block break-all rounded-lg bg-stone-50 p-3 font-mono text-xs text-ink">
-                      /book/{tenant.slug}
-                    </code>
-                    <Link
-                      href={`/book/${tenant.slug}`}
-                      target="_blank"
-                      className="mt-2 inline-block text-xs font-medium text-brand-700 hover:underline"
-                    >
-                      Open the booking page
-                    </Link>
-                    <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-                      Customers pick a service, a stylist and a time. No payment is taken online — they pay at the
-                      salon.
-                    </p>
-                  </>
-                ) : null}
-              </CardBody>
-            </Card>
+            {tenant ? (
+              <BookingEmbedCard
+                salonName={tenant.name}
+                bookingUrl={bookingPageUrl(tenant.slug)}
+                embedSrc={embedScriptUrl(tenant.slug)}
+              />
+            ) : null}
+
+            <BookingCapacityCard
+              branches={(branches?.data ?? []).map((branch) => ({
+                id: branch.id,
+                name: branch.name,
+                city: branch.city,
+                maxConcurrentBookings: branch.maxConcurrentBookings,
+              }))}
+              canEdit={user?.permissions.includes('branch.manage') ?? false}
+            />
 
             <BillingDefaultsCard
               settings={tenant?.settings ?? {}}

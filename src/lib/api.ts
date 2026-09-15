@@ -18,6 +18,18 @@ export class ApiError extends Error {
   get isAuthError(): boolean {
     return this.status === 401;
   }
+
+  /**
+   * The server understood perfectly well and said no.
+   *
+   * Distinct from 401: signing in again will not help, because the account is
+   * fine and the role simply does not include this. Treating the two alike is
+   * how people end up in a login loop being asked to re-enter a password that
+   * was never the problem.
+   */
+  get isForbidden(): boolean {
+    return this.status === 403;
+  }
 }
 
 export interface ApiRequest {
@@ -42,7 +54,7 @@ export function buildUrl(path: string, query?: ApiRequest['query']): string {
 }
 
 /**
- * Server-side call to the Salon OS API. Used by server components and route
+ * Server-side call to the Parlon API. Used by server components and route
  * handlers; the browser never calls the API directly.
  */
 export async function apiFetch<T>(path: string, options: ApiRequest = {}): Promise<T> {
@@ -125,5 +137,39 @@ export async function apiFetchSafe<T>(path: string, options: ApiRequest = {}): P
     return await apiFetch<T>(path, options);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Fetch something the caller may not be allowed to see.
+ *
+ * Returns null on 403 instead of throwing, so a refusal can be RENDERED — as
+ * <PermissionGate /> — rather than thrown at an error boundary. That matters
+ * because Next redacts server-component errors in production: by the time one
+ * reaches error.tsx it is a digest with no status on it, and the page can only
+ * apologise vaguely. Catching it here keeps the reason while we still have it.
+ *
+ * Every other failure still throws. A 500 is not a permissions problem and
+ * should not be dressed up as one.
+ */
+export async function apiFetchAllowed<T>(path: string, options: ApiRequest = {}): Promise<T | null> {
+  try {
+    return await apiFetch<T>(path, options);
+  } catch (error) {
+    if (error instanceof ApiError && error.isForbidden) return null;
+    throw error;
+  }
+}
+
+/** The same, for paginated reads. */
+export async function apiFetchListAllowed<T>(
+  path: string,
+  options: ApiRequest = {},
+): Promise<{ data: T[]; meta: PageMeta } | null> {
+  try {
+    return await apiFetchList<T>(path, options);
+  } catch (error) {
+    if (error instanceof ApiError && error.isForbidden) return null;
+    throw error;
   }
 }

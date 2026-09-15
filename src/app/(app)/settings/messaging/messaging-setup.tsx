@@ -279,7 +279,7 @@ export function MessagingSetupForm({ setup }: { setup: MessagingSetup }) {
                 id={id}
                 value={email.fromName}
                 onChange={(e) => setEmail((m) => ({ ...m, fromName: e.target.value }))}
-                placeholder="Glow Studio"
+                placeholder="Your salon's name"
               />
             )}
           </Field>
@@ -291,7 +291,7 @@ export function MessagingSetupForm({ setup }: { setup: MessagingSetup }) {
                 type="email"
                 value={email.fromAddress}
                 onChange={(e) => setEmail((m) => ({ ...m, fromAddress: e.target.value }))}
-                placeholder="hello@glowstudio.in"
+                placeholder="hello@yoursalon.in"
               />
             )}
           </Field>

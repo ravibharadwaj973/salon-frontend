@@ -1,7 +1,8 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+import { apiFetchAllowed } from '@/lib/api';
 import { PageHeader } from '@/components/ui/display';
 import { LibraryBrowser } from './library-browser';
 import type { LibraryBrowse } from '@/lib/types';
@@ -17,9 +18,13 @@ export default async function TemplateLibraryPage({
 }) {
   const sp = await searchParams;
 
-  const library = await apiFetch<LibraryBrowse>('/messaging/library', {
+  const library = await apiFetchAllowed<LibraryBrowse>('/messaging/library', {
     query: { occasion: sp.occasion, channel: sp.channel, q: sp.q },
   });
+
+  if (!library) {
+    return <PermissionGate permission="template.manage" what="The template library is restricted." />;
+  }
 
   return (
     <>

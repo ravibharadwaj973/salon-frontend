@@ -1,5 +1,5 @@
 /**
- * Shapes returned by the Salon OS API. Kept hand-written and deliberately
+ * Shapes returned by the Parlon API. Kept hand-written and deliberately
  * partial — only what the UI actually reads — so the app is not coupled to
  * every field the backend happens to return.
  */
@@ -325,6 +325,8 @@ export interface Appointment {
   endAt: string;
   status: AppointmentStatus;
   source: string;
+  /** Which page the online booking came from — "website", "insta", a hostname. */
+  sourceRef: string | null;
   notes: string | null;
   totalDurationMin: number;
   estimatedAmount: Money;
@@ -368,7 +370,8 @@ export interface CalendarResponse {
 export interface SlotGroup {
   staffId: string;
   staffName: string;
-  slots: { start: string; end: string; label: string }[];
+  /** `available: false` means that stylist is already booked then. */
+  slots: { start: string; end: string; label: string; available: boolean }[];
 }
 
 export type PaymentMode =

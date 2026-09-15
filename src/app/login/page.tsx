@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { ParlonLogo, ParlonMark } from '@/components/brand/parlon-logo';
 import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
@@ -10,8 +11,10 @@ export default function LoginPage() {
       {/* Left: the pitch, not a feature list. */}
       <section className="relative hidden w-1/2 flex-col justify-between bg-brand-700 p-10 text-white lg:flex">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 text-sm font-bold">S</span>
-          <span className="text-sm font-semibold tracking-tight">Salon OS</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+            <ParlonMark className="h-5 w-5 text-white" />
+          </span>
+          <span className="text-sm font-semibold tracking-tight">Parlon</span>
         </div>
 
         <div className="max-w-md">
@@ -42,16 +45,14 @@ export default function LoginPage() {
           </ol>
         </div>
 
-        <p className="text-2xs text-brand-200">© {new Date().getFullYear()} Salon OS</p>
+        <p className="text-2xs text-brand-200">© {new Date().getFullYear()} Parlon</p>
       </section>
 
       {/* Right: the form */}
       <section className="flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-              S
-            </span>
+            <ParlonLogo className="h-9 w-9" />
           </div>
 
           <h2 className="text-xl font-semibold tracking-tight text-ink">Sign in</h2>

@@ -34,8 +34,31 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 }
 
-export default async function BookPage({ params }: { params: Promise<{ slug: string }> }) {
+/**
+ * The booking page, and the thing a salon puts on their own website.
+ *
+ * It answers on its own at /book/<slug>, and renders inside an iframe on the
+ * salon's site when `?embed=1` — the same flow either way, so there is one
+ * booking screen to keep working rather than two. Embedded, it drops its own
+ * header and footer: the customer is already looking at the salon's branding,
+ * and repeating the name inside the frame just makes it look bolted on.
+ *
+ *   ?embed=1            chrome-free, for an iframe
+ *   ?branch=<id>        start on a particular branch
+ *   ?service=<id>       start with a service already chosen
+ *   ?ref=<label>        recorded against the booking, so the owner can tell
+ *                       their website from their Instagram bio
+ */
+export default async function BookPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ embed?: string; branch?: string; service?: string; ref?: string }>;
+}) {
   const { slug } = await params;
+  const query = await searchParams;
+  const embedded = query.embed === '1' || query.embed === 'true';
 
   let data: PublicSalon;
   try {
@@ -48,6 +71,25 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
   const menu = await apiFetch<{ id: string; name: string; services: Service[] }[]>(`/public/${slug}/services`, {
     noBranch: true,
   }).catch(() => []);
+
+  const flow = (
+    <BookingFlow
+      slug={slug}
+      salonName={data.salon.name}
+      branches={data.branches}
+      menu={menu}
+      embedded={embedded}
+      preselect={{ branchId: query.branch, serviceId: query.service, ref: query.ref }}
+    />
+  );
+
+  if (embedded) {
+    return (
+      <main className="bg-transparent px-4 py-5">
+        <div className="mx-auto max-w-2xl">{flow}</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-canvas">
@@ -80,9 +122,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
         </div>
       </header>
 
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        <BookingFlow slug={slug} salonName={data.salon.name} branches={data.branches} menu={menu} />
-      </div>
+      <div className="mx-auto max-w-2xl px-4 py-6">{flow}</div>
 
       <footer className="pb-10 text-center text-2xs text-ink-subtle">
         You pay at the salon — no payment is taken online.

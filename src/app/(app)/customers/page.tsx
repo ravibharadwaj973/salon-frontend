@@ -1,7 +1,8 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Upload, UserPlus, Users } from 'lucide-react';
-import { apiFetchList } from '@/lib/api';
+import { apiFetchListAllowed } from '@/lib/api';
 import { Card, EmptyState, PageHeader, StatusBadge, Avatar } from '@/components/ui/display';
 import { ButtonLink } from '@/components/ui/button';
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
@@ -24,7 +25,7 @@ export default async function CustomersPage({
   // "Lapsed" is the win-back working list: 45+ days since the last visit.
   const lapsedCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: customers, meta } = await apiFetchList<Customer>('/customers', {
+  const result = await apiFetchListAllowed<Customer>('/customers', {
     query: {
       q: params.q,
       tier: params.tier,
@@ -35,6 +36,12 @@ export default async function CustomersPage({
       ...(params.lapsed === 'true' ? { lastVisitBefore: lapsedCutoff, minVisits: 1 } : {}),
     },
   });
+
+  if (!result) {
+    return <PermissionGate permission="customer.view" what="The customer book is restricted." />;
+  }
+
+  const { data: customers, meta } = result;
 
   return (
     <>

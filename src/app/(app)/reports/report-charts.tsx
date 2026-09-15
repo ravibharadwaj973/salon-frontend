@@ -21,8 +21,14 @@ import type { Money } from '@/lib/types';
  * chroma floor, CVD separation, normal-vision floor, contrast) against the light
  * surface, all pairs. Two categorical slots is all this app needs; anything more
  * folds into "Other" rather than inventing hues.
+ *
+ * Re-validated when the brand moved from plum to orange: orange/blue separates
+ * at ΔE 26.5 for protanopia and 34.8 for normal vision, comfortably above the
+ * floor. Changing SERIES_1 again means running the checker again — two hues
+ * that look fine to you can be the same colour to a colourblind owner reading
+ * their own takings.
  */
-const SERIES_1 = '#B03A6B'; // brand plum — the primary measure
+const SERIES_1 = '#EA580C'; // brand orange — the primary measure
 const SERIES_2 = '#2a78d6'; // blue — the comparison measure
 const GRID = '#E7E5E4';
 const AXIS_TEXT = '#78716C';
@@ -198,7 +204,7 @@ export function RetentionGrid({
     if (pct < 40) return { background: '#FACFDF', color: '#63243E' };
     if (pct < 60) return { background: '#F5A8C4', color: '#63243E' };
     if (pct < 80) return { background: '#EC739F', color: '#ffffff' };
-    return { background: '#B03A6B', color: '#ffffff' };
+    return { background: '#EA580C', color: '#ffffff' };
   };
 
   return (

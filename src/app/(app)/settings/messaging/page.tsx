@@ -1,7 +1,8 @@
+import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+import { apiFetchAllowed } from '@/lib/api';
 import { PageHeader } from '@/components/ui/display';
 import { MessagingSetupForm } from './messaging-setup';
 import type { MessagingSetup } from '@/lib/types';
@@ -11,7 +12,11 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Messaging setup' };
 
 export default async function MessagingSetupPage() {
-  const setup = await apiFetch<MessagingSetup>('/messaging/setup');
+  const setup = await apiFetchAllowed<MessagingSetup>('/messaging/setup');
+
+  if (!setup) {
+    return <PermissionGate permission="settings.manage" what="Messaging setup is restricted." />;
+  }
 
   return (
     <>
