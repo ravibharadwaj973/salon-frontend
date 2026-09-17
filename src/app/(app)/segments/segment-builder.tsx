@@ -48,8 +48,8 @@ interface Condition {
 interface Preview {
   count: number;
   approximate: boolean;
-  whatsappReachable: number;
-  emailReachable: number;
+  /** Per channel: who gets it, who has no address, who has not opted in. */
+  reach: Record<'WHATSAPP' | 'SMS' | 'EMAIL', { reachable: number; noAddress: number; noConsent: number }>;
   sample: Customer[];
 }
 
@@ -348,17 +348,34 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
                 {count(preview.count)} customer{preview.count === 1 ? '' : 's'} match
               </p>
 
-              {/* Reachability, because the audience you can message is the one
-                  that actually matters when the campaign goes out. */}
-              <p className="mt-1 text-xs text-brand-700">
-                {count(preview.whatsappReachable)} on WhatsApp · {count(preview.emailReachable)} on email
-              </p>
-
-              {preview.count > 0 && preview.whatsappReachable < preview.count ? (
-                <p className="mt-1 text-xs text-brand-700">
-                  {count(preview.count - preview.whatsappReachable)} have not opted in to WhatsApp marketing, so a
-                  WhatsApp campaign will skip them.
-                </p>
+              {/* Reachability per channel, because "how many match" and "how
+                  many can be messaged" are different numbers — and they are
+                  different on each channel. A book that is 2,400 strong on
+                  WhatsApp is often under 900 on email, since most walk-ins
+                  give a phone number and no address. Picking the channel for
+                  a campaign without these three is guesswork. */}
+              {preview.count > 0 ? (
+                <div className="mt-2.5 grid gap-1.5 sm:grid-cols-3">
+                  {(['WHATSAPP', 'SMS', 'EMAIL'] as const).map((key) => {
+                    const row = preview.reach[key];
+                    const short = key === 'WHATSAPP' ? 'WhatsApp' : key === 'SMS' ? 'SMS' : 'Email';
+                    return (
+                      <div key={key} className="rounded-md bg-white/70 px-2.5 py-2 ring-1 ring-inset ring-brand-200">
+                        <p className="text-2xs font-medium uppercase tracking-wide text-brand-700">{short}</p>
+                        <p className="tnum text-sm font-semibold text-brand-900">{count(row.reachable)}</p>
+                        {/* Why the rest are missing, because the two have
+                            different fixes: collect addresses, or ask for
+                            consent. */}
+                        <p className="mt-0.5 text-2xs leading-snug text-brand-700">
+                          {row.noAddress > 0 ? `${count(row.noAddress)} no ${key === 'EMAIL' ? 'email' : 'number'}` : null}
+                          {row.noAddress > 0 && row.noConsent > 0 ? ' · ' : null}
+                          {row.noConsent > 0 ? `${count(row.noConsent)} not opted in` : null}
+                          {row.noAddress === 0 && row.noConsent === 0 ? 'everyone who matches' : null}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : null}
 
               {preview.count === 0 ? (

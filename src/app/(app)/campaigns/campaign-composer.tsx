@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Megaphone, Send } from 'lucide-react';
-import { apiPost, errorMessage } from '@/lib/client';
+import { AlertTriangle, Megaphone, Send } from 'lucide-react';
+import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
@@ -11,6 +11,25 @@ import { Badge } from '@/components/ui/display';
 import { count, money } from '@/lib/format';
 import type { Campaign, MessageTemplate, Segment } from '@/lib/types';
 
+type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
+type Reach = Record<ChannelKey, { reachable: number; noAddress: number; noConsent: number }>;
+
+const CHANNEL_WORD: Record<string, string> = { WHATSAPP: 'WhatsApp', SMS: 'SMS', EMAIL: 'email' };
+
+/**
+ * A campaign goes to thousands of real people and cannot be recalled.
+ *
+ * So the form does not send. It hands over to a confirmation step that states
+ * the four things somebody would want to know before agreeing — who, on what
+ * channel, how many of them can actually be reached, and what it costs — and
+ * that step is the only place the send button exists.
+ *
+ * The numbers there are fetched fresh from the server rather than taken from
+ * the segment's stored size, because those are different numbers: a segment of
+ * 2,400 is around 2,380 on WhatsApp and often under 900 on email, since most
+ * walk-ins leave a phone number and no address. A confirmation that overstates
+ * the audience is worse than none, because it teaches people to click through.
+ */
 export function CampaignComposer({
   segments,
   templates,
@@ -24,8 +43,19 @@ export function CampaignComposer({
   const toast = useToast();
 
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reach, setReach] = useState<Reach | null>(null);
+  const [reachLoading, setReachLoading] = useState(false);
+
+  /**
+   * The campaign, once created, so a failed launch can be retried without
+   * creating a second one. Pressing send twice after a network error used to
+   * leave a duplicate draft behind every time.
+   */
+  const [createdId, setCreatedId] = useState<string | null>(null);
+
   const [form, setForm] = useState({
     name: '',
     segmentId: defaultSegmentId ?? segments[0]?.id ?? '',
@@ -35,38 +65,94 @@ export function CampaignComposer({
     sendNow: true,
   });
 
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+    // Any edit invalidates a campaign already created from an earlier attempt.
+    setCreatedId(null);
+  };
 
   const segment = segments.find((s) => s.id === form.segmentId);
   const template = templates.find((t) => t.id === form.templateId);
   const marketing = template?.category === 'MARKETING';
-  const estimatedCost = (segment?.lastCount ?? 0) * form.costPerMessage;
+  const channel = (template?.channel ?? 'WHATSAPP') as ChannelKey;
 
-  async function submit() {
+  // How many will actually be sent — not the segment's size.
+  const willSend = reach?.[channel]?.reachable ?? null;
+  const estimatedCost = (willSend ?? segment?.lastCount ?? 0) * form.costPerMessage;
+
+  // Asked on the confirmation step, for the exact segment and category chosen.
+  useEffect(() => {
+    if (!confirming || !form.segmentId || !template) return;
+    let cancelled = false;
+    setReachLoading(true);
+    apiGet<Reach>(`segments/${form.segmentId}/reach`, { query: { category: template.category } })
+      .then((result) => {
+        if (!cancelled) setReach(result);
+      })
+      .catch(() => {
+        // A failed count must not block the send; it falls back to the
+        // segment's stored size and says so rather than inventing a figure.
+        if (!cancelled) setReach(null);
+      })
+      .finally(() => {
+        if (!cancelled) setReachLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [confirming, form.segmentId, template]);
+
+  function review() {
     setError(null);
     if (!form.name.trim() || !form.segmentId || !form.templateId) {
       setError('A name, an audience and a template are all needed.');
       return;
     }
+    if (!form.sendNow && !form.scheduledAt) {
+      setError('Pick a date and time, or switch back to sending now.');
+      return;
+    }
+    setConfirming(true);
+  }
 
+  function close() {
+    setOpen(false);
+    setConfirming(false);
+    setReach(null);
+    setCreatedId(null);
+  }
+
+  async function send() {
+    setError(null);
     setSaving(true);
     try {
-      const campaign = await apiPost<Campaign>('campaigns', {
-        name: form.name.trim(),
-        channel: template?.channel ?? 'WHATSAPP',
-        segmentId: form.segmentId,
-        templateId: form.templateId,
-        costPerMessage: form.costPerMessage,
-        scheduledAt: form.sendNow ? undefined : form.scheduledAt || undefined,
-      });
+      const id =
+        createdId ??
+        (
+          await apiPost<Campaign>('campaigns', {
+            name: form.name.trim(),
+            channel,
+            segmentId: form.segmentId,
+            templateId: form.templateId,
+            costPerMessage: form.costPerMessage,
+            scheduledAt: form.sendNow ? undefined : form.scheduledAt || undefined,
+          })
+        ).id;
 
-      await apiPost(`campaigns/${campaign.id}/launch`, {
+      // Remember it before launching: if the launch fails, a retry launches
+      // this campaign rather than creating another one.
+      setCreatedId(id);
+
+      await apiPost(`campaigns/${id}/launch`, {
         sendAt: form.sendNow ? undefined : form.scheduledAt || undefined,
       });
 
-      toast.success(form.sendNow ? 'Campaign queued for sending' : 'Campaign scheduled');
-      setOpen(false);
+      toast.success(
+        form.sendNow
+          ? `Sending to ${willSend === null ? 'the segment' : count(willSend)} on ${CHANNEL_WORD[channel]} — see Messages`
+          : 'Campaign scheduled',
+      );
+      close();
       router.refresh();
     } catch (err) {
       setError(errorMessage(err));
@@ -84,114 +170,265 @@ export function CampaignComposer({
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
-        title="New campaign"
-        description="Send once to a segment. Bookings and revenue are credited back for the next 14 days."
+        onClose={close}
+        title={confirming ? 'Send this campaign?' : 'New campaign'}
+        description={
+          confirming
+            ? 'Once it goes out it cannot be recalled. Check the numbers below.'
+            : 'Send once to a segment. Bookings and revenue are credited back for the next 14 days.'
+        }
         footer={
-          <>
-            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={submit} loading={saving}>
-              <Send className="h-4 w-4" />
-              {form.sendNow ? 'Send now' : 'Schedule'}
-            </Button>
-          </>
+          confirming ? (
+            <>
+              <Button variant="secondary" onClick={() => setConfirming(false)} disabled={saving}>
+                Back
+              </Button>
+              <Button onClick={send} loading={saving} disabled={reachLoading || willSend === 0}>
+                <Send className="h-4 w-4" />
+                {form.sendNow
+                  ? willSend === null
+                    ? 'Send now'
+                    : `Send to ${count(willSend)}`
+                  : 'Schedule it'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={close}>
+                Cancel
+              </Button>
+              <Button onClick={review}>Review</Button>
+            </>
+          )
         }
       >
-        <div className="space-y-4">
-          {error ? <p className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">{error}</p> : null}
+        {confirming ? (
+          <ConfirmStep
+            name={form.name.trim()}
+            segmentName={segment?.name ?? 'the segment'}
+            segmentSize={segment?.lastCount ?? 0}
+            templateName={template?.name ?? ''}
+            channel={channel}
+            marketing={marketing}
+            reach={reach}
+            loading={reachLoading}
+            sendNow={form.sendNow}
+            scheduledAt={form.scheduledAt}
+            estimatedCost={estimatedCost}
+            error={error}
+          />
+        ) : (
+          <div className="space-y-4">
+            {error ? <p className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">{error}</p> : null}
 
-          <Field label="Campaign name" required>
-            {({ id }) => (
-              <Input id={id} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="September win-back" autoFocus />
-            )}
-          </Field>
-
-          <Field label="Audience" required hint={segment ? `${count(segment.lastCount)} customers at last count` : undefined}>
-            {({ id }) => (
-              <Select id={id} value={form.segmentId} onChange={(e) => set('segmentId', e.target.value)}>
-                <option value="">Choose a segment…</option>
-                {segments.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name} ({option.lastCount})
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-
-          <Field label="Message template" required>
-            {({ id }) => (
-              <Select id={id} value={form.templateId} onChange={(e) => set('templateId', e.target.value)}>
-                <option value="">Choose a template…</option>
-                {templates.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name} — {option.channel.toLowerCase()} / {option.category.toLowerCase()}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-
-          {template ? (
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-              <div className="mb-1.5 flex items-center gap-2">
-                <Badge tone={marketing ? 'warning' : 'info'}>{template.category.toLowerCase()}</Badge>
-                <Badge tone={template.approvalStatus === 'APPROVED' ? 'success' : 'neutral'}>
-                  {template.approvalStatus.toLowerCase()}
-                </Badge>
-              </div>
-              <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink">{template.bodyText}</p>
-              {marketing ? (
-                <p className="mt-2 text-2xs text-amber-700">
-                  Marketing template — it will only reach customers who have opted in to WhatsApp.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Cost per message (₹)" hint="Used to work out ROI">
+            <Field label="Campaign name" required>
               {({ id }) => (
                 <Input
                   id={id}
-                  type="number"
-                  step="0.1"
-                  value={form.costPerMessage}
-                  onChange={(e) => set('costPerMessage', Number(e.target.value))}
-                  className="tnum text-right"
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  placeholder="September win-back"
+                  autoFocus
                 />
               )}
             </Field>
 
-            <Field label="When">
+            <Field
+              label="Audience"
+              required
+              hint={segment ? `${count(segment.lastCount)} customers at last count` : undefined}
+            >
               {({ id }) => (
-                <Select id={id} value={form.sendNow ? 'now' : 'later'} onChange={(e) => set('sendNow', e.target.value === 'now')}>
-                  <option value="now">Send now</option>
-                  <option value="later">Schedule</option>
+                <Select id={id} value={form.segmentId} onChange={(e) => set('segmentId', e.target.value)}>
+                  <option value="">Choose a segment…</option>
+                  {segments.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name} ({option.lastCount})
+                    </option>
+                  ))}
                 </Select>
               )}
             </Field>
-          </div>
 
-          {!form.sendNow ? (
-            <Field label="Send at" required>
+            <Field label="Message template" required>
               {({ id }) => (
-                <Input id={id} type="datetime-local" value={form.scheduledAt} onChange={(e) => set('scheduledAt', e.target.value)} />
+                <Select id={id} value={form.templateId} onChange={(e) => set('templateId', e.target.value)}>
+                  <option value="">Choose a template…</option>
+                  {templates.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name} — {option.channel.toLowerCase()} / {option.category.toLowerCase()}
+                    </option>
+                  ))}
+                </Select>
               )}
             </Field>
-          ) : null}
 
-          {segment ? (
-            <p className="rounded-lg bg-stone-50 p-3 text-xs text-ink-muted">
-              Roughly {count(segment.lastCount)} messages · estimated spend{' '}
-              <span className="tnum font-medium text-ink">{money(estimatedCost)}</span>. Anyone who has not opted in is
-              skipped, so the real number may be lower.
-            </p>
-          ) : null}
-        </div>
+            {template ? (
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                <div className="mb-1.5 flex items-center gap-2">
+                  <Badge tone={marketing ? 'warning' : 'info'}>{template.category.toLowerCase()}</Badge>
+                  <Badge tone={template.approvalStatus === 'APPROVED' ? 'success' : 'neutral'}>
+                    {template.approvalStatus.toLowerCase()}
+                  </Badge>
+                </div>
+                <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink">{template.bodyText}</p>
+                {marketing ? (
+                  // Names the template's own channel. It used to say WhatsApp
+                  // whatever the template was, which was wrong two times in
+                  // three and taught people to ignore it.
+                  <p className="mt-2 text-2xs text-amber-700">
+                    Marketing template — it will only reach customers who have opted in to{' '}
+                    {CHANNEL_WORD[template.channel] ?? template.channel.toLowerCase()}.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Cost per message (₹)" hint="Used to work out ROI">
+                {({ id }) => (
+                  <Input
+                    id={id}
+                    type="number"
+                    step="0.1"
+                    value={form.costPerMessage}
+                    onChange={(e) => set('costPerMessage', Number(e.target.value))}
+                    className="tnum text-right"
+                  />
+                )}
+              </Field>
+
+              <Field label="When">
+                {({ id }) => (
+                  <Select
+                    id={id}
+                    value={form.sendNow ? 'now' : 'later'}
+                    onChange={(e) => set('sendNow', e.target.value === 'now')}
+                  >
+                    <option value="now">Send now</option>
+                    <option value="later">Schedule</option>
+                  </Select>
+                )}
+              </Field>
+            </div>
+
+            {!form.sendNow ? (
+              <Field label="Send at" required>
+                {({ id }) => (
+                  <Input
+                    id={id}
+                    type="datetime-local"
+                    value={form.scheduledAt}
+                    onChange={(e) => set('scheduledAt', e.target.value)}
+                  />
+                )}
+              </Field>
+            ) : null}
+          </div>
+        )}
       </Modal>
     </>
+  );
+}
+
+/** The last screen before thousands of messages leave the building. */
+function ConfirmStep({
+  name,
+  segmentName,
+  segmentSize,
+  templateName,
+  channel,
+  marketing,
+  reach,
+  loading,
+  sendNow,
+  scheduledAt,
+  estimatedCost,
+  error,
+}: {
+  name: string;
+  segmentName: string;
+  segmentSize: number;
+  templateName: string;
+  channel: ChannelKey;
+  marketing: boolean;
+  reach: Reach | null;
+  loading: boolean;
+  sendNow: boolean;
+  scheduledAt: string;
+  estimatedCost: number;
+  error: string | null;
+}) {
+  const row = reach?.[channel];
+  const word = CHANNEL_WORD[channel] ?? channel.toLowerCase();
+
+  return (
+    <div className="space-y-4">
+      {error ? <p className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">{error}</p> : null}
+
+      <dl className="divide-y divide-stone-200 rounded-lg border border-stone-200 text-sm">
+        {[
+          ['Campaign', name],
+          ['Audience', segmentName],
+          ['Template', templateName],
+          ['Channel', word],
+          ['When', sendNow ? 'Now' : scheduledAt.replace('T', ' at ')],
+        ].map(([label, value]) => (
+          <div key={label} className="flex items-start justify-between gap-4 px-3 py-2">
+            <dt className="text-xs text-ink-muted">{label}</dt>
+            <dd className="text-right text-xs font-medium text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {loading ? (
+        <p className="rounded-lg bg-stone-50 p-3 text-xs text-ink-muted">Working out who this reaches…</p>
+      ) : row ? (
+        <div className="rounded-lg border border-brand-200 bg-brand-50/60 p-3">
+          <p className="text-sm font-semibold text-brand-900">
+            {count(row.reachable)} {row.reachable === 1 ? 'message' : 'messages'} will be sent on {word}
+          </p>
+
+          {/* The gap between the segment and the send, itemised. Somebody who
+              expected 2,400 and is getting 900 should find out here, with the
+              reason, not afterwards from the message log. */}
+          {row.noAddress > 0 || row.noConsent > 0 ? (
+            <ul className="mt-2 space-y-1 text-xs text-brand-800">
+              {row.noAddress > 0 ? (
+                <li>
+                  {count(row.noAddress)} of the {count(segmentSize)} have no{' '}
+                  {channel === 'EMAIL' ? 'email address' : 'phone number'} on file and will be skipped.
+                </li>
+              ) : null}
+              {row.noConsent > 0 ? (
+                <li>
+                  {count(row.noConsent)} have not opted in to {word}
+                  {marketing ? ' marketing' : ''}, so they will be skipped too.
+                </li>
+              ) : null}
+            </ul>
+          ) : (
+            <p className="mt-1 text-xs text-brand-800">Everyone in this segment can be reached on {word}.</p>
+          )}
+
+          <p className="mt-2 text-xs text-brand-800">
+            Estimated spend <span className="tnum font-medium text-brand-900">{money(estimatedCost)}</span>.
+          </p>
+        </div>
+      ) : (
+        <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Could not work out how many this reaches. The segment held {count(segmentSize)} at last count; the real
+          number sent may be lower.
+        </p>
+      )}
+
+      {row?.reachable === 0 ? (
+        <p className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+          Nobody in this segment can be reached on {word}, so there is nothing to send. Try another channel, or
+          collect {channel === 'EMAIL' ? 'email addresses' : 'consent'} first.
+        </p>
+      ) : null}
+    </div>
   );
 }
