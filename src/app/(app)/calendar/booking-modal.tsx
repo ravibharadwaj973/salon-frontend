@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Clock, Search, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { apiList, apiPost, errorMessage } from '@/lib/client';
+import { ClientApiError, apiList, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
@@ -71,6 +71,15 @@ export function BookingModal({
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Why the server refused, in its own words.
+   *
+   * A 409 carries a list of conflicts — the branch is shut, this stylist is
+   * busy, the shop is at its ceiling — and the modal used to show only the
+   * headline "This slot is not available", which tells a receptionist nothing
+   * about what to change. These are the reasons.
+   */
+  const [conflicts, setConflicts] = useState<{ type: string; message: string }[]>([]);
 
   const allServices = useMemo(() => serviceGroups.flatMap((group) => group.services), [serviceGroups]);
   const selected = allServices.filter((service) => serviceIds.includes(service.id));
@@ -145,12 +154,25 @@ export function BookingModal({
 
   const full = timeState === 'full';
 
+  /**
+   * The server has already refused this booking once.
+   *
+   * `full` only knows about the slot grid, so a refusal for a reason the grid
+   * cannot see — the branch shut, a stylist on leave, the shop at its ceiling
+   * — left the button saying "Book appointment" and re-sending exactly the
+   * same request. The desk could press it forever. Once the server has said
+   * no, the only way through is to say so deliberately.
+   */
+  const refused = conflicts.length > 0;
+  const overriding = full || refused;
+
   function toggleService(id: string) {
     setServiceIds((current) => (current.includes(id) ? current.filter((s) => s !== id) : [...current, id]));
   }
 
   async function submit(force = false) {
     setError(null);
+    setConflicts([]);
 
     if (!customer && !walkIn.name.trim()) {
       setError('Choose a customer, or enter a walk-in name.');
@@ -192,6 +214,21 @@ export function BookingModal({
       onBooked();
     } catch (err) {
       setError(errorMessage(err));
+
+      // `details` is whatever the API put in the error body; for a booking
+      // clash that is the conflict list. Anything else shape-wise is ignored
+      // rather than risking a crash inside an error handler.
+      const details = err instanceof ClientApiError ? err.details : null;
+      const list = (details as { conflicts?: unknown } | null)?.conflicts;
+      setConflicts(
+        Array.isArray(list)
+          ? list
+              .filter((c): c is { type: string; message: string } =>
+                Boolean(c) && typeof (c as { message?: unknown }).message === 'string',
+              )
+              .map((c) => ({ type: String(c.type ?? ''), message: c.message }))
+          : [],
+      );
     } finally {
       setSaving(false);
     }
@@ -225,14 +262,39 @@ export function BookingModal({
           </Button>
           {/* Full does not mean forbidden. The desk can always overbook — but
               it has to be a decision, not a click that looks like any other. */}
-          <Button onClick={() => submit(full)} loading={saving} variant={full ? 'secondary' : 'primary'}>
-            {full ? 'Book anyway' : 'Book appointment'}
+          <Button onClick={() => submit(overriding)} loading={saving} variant={overriding ? 'secondary' : 'primary'}>
+            {overriding ? 'Book anyway' : 'Book appointment'}
           </Button>
         </>
       }
     >
       <div className="space-y-5">
-        {error ? <p className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">{error}</p> : null}
+        {error ? (
+          <div className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">
+            <p className="font-medium">{error}</p>
+
+            {conflicts.length > 0 ? (
+              <>
+                <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
+                  {conflicts.map((conflict, index) => (
+                    <li key={`${conflict.type}-${index}`}>{conflict.message}</li>
+                  ))}
+                </ul>
+
+                {/* The branch being shut is the one reason overbooking cannot
+                    fix — there is nobody there. Saying so saves a pointless
+                    second attempt. */}
+                {conflicts.some((c) => c.type === 'BRANCH_CLOSED') ? (
+                  <p className="mt-1.5">
+                    Opening hours are set per branch under Settings → Branches.
+                  </p>
+                ) : (
+                  <p className="mt-1.5">Use “Book anyway” if you want to take it regardless.</p>
+                )}
+              </>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Customer */}
         <section>
