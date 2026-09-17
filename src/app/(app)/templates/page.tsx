@@ -3,6 +3,7 @@ import { MessageSquare, ShieldCheck } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/display';
 import { TemplateEditor } from './template-editor';
+import { RestoreDefaults } from './restore-defaults';
 import type { MessageTemplate, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Message templates' };
@@ -15,6 +16,16 @@ export default async function TemplatesPage() {
   ]);
 
   const canManage = user?.permissions.includes('template.manage') ?? false;
+
+  /**
+   * A channel with no templates is the one that makes the send screen look
+   * broken — the picker is simply empty there. Surfaced as a named gap with a
+   * one-click fix, rather than leaving somebody to wonder whether templates
+   * are a WhatsApp-only feature.
+   */
+  const emptyChannels = (['WHATSAPP', 'EMAIL', 'SMS'] as const).filter(
+    (channel) => !templates.some((template) => template.channel === channel),
+  );
   const utility = templates.filter((template) => template.category !== 'MARKETING');
   const marketing = templates.filter((template) => template.category === 'MARKETING');
 
@@ -23,8 +34,29 @@ export default async function TemplatesPage() {
       <PageHeader
         title="Message templates"
         description="What your customers actually read. Variables in {{braces}} are filled in at send time."
-        action={canManage ? <TemplateEditor /> : null}
+        action={
+          canManage ? (
+            <div className="flex items-center gap-2">
+              {emptyChannels.length > 0 ? <RestoreDefaults label="Add starters" /> : null}
+              <TemplateEditor />
+            </div>
+          ) : null
+        }
       />
+
+      {emptyChannels.length > 0 && canManage ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
+          You have no{' '}
+          <strong className="font-semibold">
+            {emptyChannels
+              .map((c) => (c === 'WHATSAPP' ? 'WhatsApp' : c === 'SMS' ? 'SMS' : 'email'))
+              .join(' or ')}
+          </strong>{' '}
+          templates, so the template picker is empty on{' '}
+          {emptyChannels.length === 1 ? 'that tab' : 'those tabs'} when you send a message. “Add starters” fills the
+          gaps with ready-written ones and leaves everything you already have untouched.
+        </div>
+      ) : null}
 
       <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50 p-3.5 text-xs leading-relaxed text-sky-900">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
