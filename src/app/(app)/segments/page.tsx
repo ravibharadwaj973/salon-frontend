@@ -61,11 +61,21 @@ export default async function SegmentsPage() {
             <Card key={segment.id} className="flex flex-col">
               <div className="flex-1 p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-sm font-semibold text-ink">{segment.name}</h2>
-                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                  <h2 className="text-sm font-semibold text-ink">
+                    <Link href={`/segments/${segment.id}`} className="hover:text-brand-700 hover:underline">
+                      {segment.name}
+                    </Link>
+                  </h2>
+                  {/* The count is the link: it is the thing somebody doubts,
+                      so it should be the thing they can click into. */}
+                  <Link
+                    href={`/segments/${segment.id}`}
+                    className="flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
+                    title="See who is in this segment"
+                  >
                     <Users className="h-3 w-3" />
                     {count(segment.lastCount)}
-                  </span>
+                  </Link>
                 </div>
 
                 {segment.description ? (
@@ -85,12 +95,20 @@ export default async function SegmentsPage() {
                 <span className="text-2xs text-ink-subtle">
                   {segment.lastComputedAt ? `Counted ${fromNow(segment.lastComputedAt)}` : 'Never counted'}
                 </span>
-                <Link
-                  href={`/campaigns?segmentId=${segment.id}`}
-                  className="text-xs font-medium text-brand-700 hover:underline"
-                >
-                  Send a campaign
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/segments/${segment.id}`}
+                    className="text-xs font-medium text-ink-muted hover:text-ink hover:underline"
+                  >
+                    See who
+                  </Link>
+                  <Link
+                    href={`/campaigns?segmentId=${segment.id}`}
+                    className="text-xs font-medium text-brand-700 hover:underline"
+                  >
+                    Send a campaign
+                  </Link>
+                </div>
               </div>
             </Card>
           ))}
