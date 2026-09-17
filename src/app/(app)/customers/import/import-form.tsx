@@ -2,7 +2,7 @@
 
 import { useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, FileSpreadsheet, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Upload } from 'lucide-react';
 import { apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/display';
@@ -13,7 +13,17 @@ interface ImportResult {
   imported: number;
   skipped: number;
   total: number;
-  skippedRows: { row: number; phone: string; reason: string }[];
+  skippedRows: {
+    row: number;
+    /** Line number in the file as a spreadsheet shows it, header counted. */
+    line: number;
+    name: string;
+    phone: string;
+    email: string;
+    reason: string;
+  }[];
+  /** Columns in the file that no field matched — their values were not stored. */
+  ignoredColumns?: string[];
 }
 
 const SAMPLE = `firstName,lastName,phone,email,gender,dob,tags,notes
@@ -34,6 +44,24 @@ export function ImportForm() {
     const reader = new FileReader();
     reader.onload = () => setCsv(String(reader.result ?? ''));
     reader.readAsText(file);
+  }
+
+  function downloadFailed() {
+    if (!result?.skippedRows.length) return;
+    const escape = (value: string) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const csvOut = [
+      'line,firstName,phone,email,reason',
+      ...result.skippedRows.map((row) =>
+        [row.line, escape(row.name), escape(row.phone), escape(row.email), escape(row.reason)].join(','),
+      ),
+    ].join('\n');
+
+    const url = URL.createObjectURL(new Blob([csvOut], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `not-imported-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function submit() {
@@ -92,23 +120,88 @@ export function ImportForm() {
                 <CheckCircle2 className="h-4 w-4" />
                 {result.imported} imported, {result.skipped} skipped of {result.total} rows
               </p>
-              {result.skippedRows.length > 0 ? (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-emerald-800">Why were rows skipped?</summary>
-                  <ul className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto text-xs text-emerald-800">
-                    {result.skippedRows.map((row) => (
-                      <li key={`${row.row}-${row.phone}`}>
-                        Row {row.row}: {row.reason} {row.phone ? `(${row.phone})` : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
               <Link href="/customers" className="mt-3 inline-block text-xs font-medium text-emerald-900 underline">
                 See your customers
               </Link>
             </div>
           ) : null}
+
+          {result?.ignoredColumns?.length ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                <AlertTriangle className="h-4 w-4" />
+                {result.ignoredColumns.length === 1 ? 'One column was' : `${result.ignoredColumns.length} columns were`}{' '}
+                not recognised
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-amber-900/80">
+                Nothing in {result.ignoredColumns.length === 1 ? 'it' : 'them'} was saved. Rename the column to one of
+                the names on the right and import again — duplicates are skipped, so re-importing the same file is safe.
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {result.ignoredColumns.map((column) => (
+                  <li key={column}>
+                    <code className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-2xs text-amber-900">
+                      {column}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {result && result.skippedRows.length > 0 ? (
+            <div className="rounded-lg border border-stone-300 bg-white">
+              <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">
+                    {result.skipped} {result.skipped === 1 ? 'row was' : 'rows were'} not imported
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    Line numbers match your file as a spreadsheet shows it. Fix these and import again — the
+                    {' '}{result.imported} already added will be skipped as duplicates.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={downloadFailed}
+                  className="shrink-0 rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-stone-50"
+                >
+                  <Download className="mr-1 inline h-3 w-3" />
+                  Download these rows
+                </button>
+              </div>
+
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-stone-50 text-2xs uppercase tracking-wide text-ink-subtle">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold">Line</th>
+                      <th className="px-3 py-2 font-semibold">Name</th>
+                      <th className="px-3 py-2 font-semibold">Phone</th>
+                      <th className="px-3 py-2 font-semibold">Email</th>
+                      <th className="px-4 py-2 font-semibold">Why it was not imported</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {result.skippedRows.map((row) => (
+                      <tr key={row.row} className="align-top">
+                        <td className="tnum px-4 py-2 font-medium text-ink">{row.line}</td>
+                        <td className="px-3 py-2 text-ink">{row.name || <span className="text-ink-subtle">—</span>}</td>
+                        <td className="tnum px-3 py-2 text-ink">
+                          {row.phone || <span className="text-ink-subtle">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-ink-muted">
+                          {row.email || <span className="text-ink-subtle">—</span>}
+                        </td>
+                        <td className="px-4 py-2 text-ink-muted">{row.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
         </CardBody>
       </Card>
 
@@ -117,14 +210,14 @@ export function ImportForm() {
         <CardBody>
           <ul className="space-y-2 text-xs">
             {[
-              ['firstName / name', 'Required'],
-              ['lastName', 'Optional — split from name if absent'],
+              ['firstName / name / customerName', 'Required'],
+              ['lastName / surname', 'Optional — split from name if absent'],
               ['phone / mobile / contact', 'Required, 10 digits'],
-              ['email', 'Optional'],
-              ['gender', 'M / F / anything'],
-              ['dob / birthday', 'YYYY-MM-DD or DD/MM/YYYY'],
-              ['tags', 'Separated by ; or |'],
-              ['notes / remarks', 'Optional'],
+              ['email / emailId / emailAddress', 'Optional'],
+              ['gender / sex', 'M / F / anything'],
+              ['dob / birthday / dateOfBirth', 'YYYY-MM-DD or DD/MM/YYYY'],
+              ['tags / labels', 'Separated by ; or |'],
+              ['notes / remarks / comments', 'Optional'],
             ].map(([column, note]) => (
               <li key={column} className="flex items-start justify-between gap-3">
                 <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-2xs text-ink">{column}</code>

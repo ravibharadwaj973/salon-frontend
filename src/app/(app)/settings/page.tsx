@@ -104,6 +104,17 @@ export default async function SettingsPage({
             {item.label}
           </Link>
         ))}
+
+        {/* A separate route rather than a tab on this page, but it belongs in
+            the same row: from a salon owner's point of view "how messages go
+            out" is a setting like any other, and until this link existed the
+            page was reachable only by typing the URL. */}
+        <Link
+          href="/settings/messaging"
+          className="rounded-md px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+        >
+          Messaging
+        </Link>
       </div>
 
       {tab === 'salon' ? (
