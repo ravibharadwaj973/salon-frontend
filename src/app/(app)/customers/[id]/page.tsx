@@ -23,6 +23,7 @@ import { Avatar, Badge, Card, CardBody, CardHeader, EmptyState, StatusBadge } fr
 import { ButtonLink } from '@/components/ui/button';
 import { CustomerNotes } from './customer-notes';
 import { EditCustomerButton } from './edit-customer-button';
+import { ConsentEditor } from './consent-editor';
 import { date, dateTime, fromNow, fullName, money, phone as formatPhone, time } from '@/lib/format';
 import type {
   Appointment,
@@ -512,7 +513,21 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           {/* Reachability */}
           {shows('contact') ? (
             <Card>
-              <CardHeader title="Reachable on" />
+              <CardHeader
+                title="Reachable on"
+                action={
+                  canManage ? (
+                    <ConsentEditor
+                      customerId={customer.id}
+                      current={{
+                        whatsappConsent: customer.whatsappConsent,
+                        smsConsent: customer.smsConsent,
+                        emailConsent: customer.emailConsent,
+                      }}
+                    />
+                  ) : null
+                }
+              />
               <CardBody className="space-y-2">
                 <ConsentRow channel="WhatsApp" status={customer.whatsappConsent} icon={MessageCircle} />
                 <ConsentRow channel="SMS" status={customer.smsConsent} icon={Phone} />
