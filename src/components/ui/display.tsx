@@ -104,12 +104,38 @@ const STATUS_TONES: Record<string, Tone> = {
   CRITICAL: 'danger',
   WARNING: 'warning',
   INFO: 'info',
+
+  // Message delivery. The happy path warms up as it climbs — grey while it sits
+  // in the queue, blue once a provider has it, green when it lands, and the
+  // brand colour only for a click, which is the one that earns money.
+  QUEUED: 'neutral',
+  SENT: 'info',
+  DELIVERED: 'success',
+  READ: 'info',
+  CLICKED: 'brand',
+  DELAYED: 'warning',
+  BOUNCED: 'danger',
+  COMPLAINED: 'danger',
+  SKIPPED: 'neutral',
 };
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
+/**
+ * `label` exists for one case: a message with status READ is "read" on WhatsApp
+ * and "opened" in email. It is the same fact — the recipient saw it — so it is
+ * one stored value, and only the wording changes with the channel.
+ */
+export function StatusBadge({
+  status,
+  label,
+  className,
+}: {
+  status: string;
+  label?: string;
+  className?: string;
+}) {
   return (
     <Badge tone={STATUS_TONES[status] ?? 'neutral'} className={className}>
-      {status.replace(/_/g, ' ').toLowerCase()}
+      {label ?? status.replace(/_/g, ' ').toLowerCase()}
     </Badge>
   );
 }

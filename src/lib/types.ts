@@ -658,7 +658,25 @@ export interface Segment {
   _count?: { campaigns: number };
 }
 
-export type MessageStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'CANCELLED';
+/**
+ * Where a message got to. Mirrors the MessageStatus enum in the Prisma schema —
+ * if you add one there, add it here and give it a tone in STATUS_TONES.
+ *
+ * The happy path climbs QUEUED → SENT → DELIVERED → READ → CLICKED and never
+ * walks back down. READ covers both a WhatsApp read receipt and an email open.
+ * DELAYED is still in flight; BOUNCED, COMPLAINED and FAILED are endings.
+ */
+export type MessageStatus =
+  | 'QUEUED'
+  | 'SENT'
+  | 'DELIVERED'
+  | 'READ'
+  | 'CLICKED'
+  | 'DELAYED'
+  | 'BOUNCED'
+  | 'COMPLAINED'
+  | 'FAILED'
+  | 'SKIPPED';
 
 /** One message, as the log records it — including why it did not arrive. */
 export interface MessageLogEntry {
@@ -674,8 +692,11 @@ export interface MessageLogEntry {
   sentAt: string | null;
   deliveredAt: string | null;
   readAt: string | null;
+  clickedAt: string | null;
   customer: { id: string; firstName: string; lastName: string | null; phone: string } | null;
   template: { id: string; name: string; category: string } | null;
+  /// Null for a one-off send from a customer's profile or the share sheet.
+  campaign: { id: string; name: string } | null;
 }
 
 export interface MessageTemplate {

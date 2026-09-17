@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 interface MessageRow {
   id: string;
   status: string;
+  channel: 'WHATSAPP' | 'SMS' | 'EMAIL';
   toAddress: string;
   errorMessage: string | null;
   queuedAt: string;
@@ -120,7 +121,18 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
       ) : null}
 
       <Card className="mt-5">
-        <CardHeader title="Recipients" subtitle="Skipped rows are customers without marketing consent" />
+        <CardHeader
+          title="Recipients"
+          subtitle="Skipped rows are customers without marketing consent"
+          action={
+            <Link
+              href={`/messages?campaignId=${campaign.id}`}
+              className="text-xs font-medium text-brand-700 hover:underline"
+            >
+              Open in the message log
+            </Link>
+          }
+        />
         {!messages || messages.data.length === 0 ? (
           <EmptyState title="No messages logged yet" description="They appear as the worker sends them." />
         ) : (
@@ -148,19 +160,19 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   </TD>
                   <TD className="tnum text-xs text-ink-muted">{message.toAddress}</TD>
                   <TD>
-                    <Badge
-                      tone={
-                        message.status === 'READ' || message.status === 'DELIVERED'
-                          ? 'success'
-                          : message.status === 'FAILED'
-                            ? 'danger'
-                            : message.status === 'SKIPPED'
-                              ? 'warning'
-                              : 'info'
+                    {/* StatusBadge owns the colour for every delivery state, so a
+                        new one (a bounce, a complaint) cannot end up blue here
+                        and red on the messages page. */}
+                    <StatusBadge
+                      status={message.status}
+                      label={
+                        message.status === 'READ'
+                          ? message.channel === 'EMAIL'
+                            ? 'opened'
+                            : 'read'
+                          : undefined
                       }
-                    >
-                      {message.status.toLowerCase()}
-                    </Badge>
+                    />
                     {message.errorMessage ? (
                       <p className="mt-0.5 max-w-xs truncate text-2xs text-ink-subtle">{message.errorMessage}</p>
                     ) : null}
