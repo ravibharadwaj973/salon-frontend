@@ -43,6 +43,35 @@ const FILTERS = [
   { key: 'DELAYED,BOUNCED,COMPLAINED,FAILED', label: 'Problems' },
 ] as const;
 
+/**
+ * The three channels are really three different jobs.
+ *
+ * WhatsApp fails for template and 24-hour-window reasons, email for address
+ * and reputation ones, SMS for DLT ones. Mixed together, a salon chasing a
+ * bounce has to read past reminders that went out fine on another channel —
+ * and the statuses do not even mean the same thing across them, since only
+ * email reports opens and clicks.
+ */
+const CHANNELS = [
+  { key: '', label: 'All channels' },
+  { key: 'WHATSAPP', label: 'WhatsApp' },
+  { key: 'EMAIL', label: 'Email' },
+  { key: 'SMS', label: 'SMS' },
+] as const;
+
+/**
+ * Which status chips are worth showing for a channel.
+ *
+ * Opens and clicks only exist in email — WhatsApp has a read receipt, which
+ * shares the READ value, and SMS reports neither. Offering "Clicked" on SMS
+ * is offering a filter that can only ever come back empty.
+ */
+function filtersFor(channel: string): readonly { key: string; label: string }[] {
+  if (channel === 'SMS') return FILTERS.filter((f) => !['READ', 'CLICKED'].includes(f.key));
+  if (channel === 'WHATSAPP') return FILTERS.filter((f) => f.key !== 'CLICKED').map((f) => (f.key === 'READ' ? { key: 'READ', label: 'Read' } : f));
+  return FILTERS;
+}
+
 const NEEDS_ATTENTION = new Set(['DELAYED', 'BOUNCED', 'COMPLAINED', 'FAILED']);
 
 /** READ is a read receipt on WhatsApp and an open in email — same fact, two words. */
@@ -115,15 +144,20 @@ export default async function MessagesPage({
 }) {
   const params = await searchParams;
   const page = Number(params.page ?? 1);
-  const status = params.status ?? '';
   const campaignId = params.campaignId ?? '';
+  const channel = CHANNELS.some((c) => c.key === params.channel) ? (params.channel ?? '') : '';
+
+  // Switching to SMS while "Clicked" is selected would show an empty table and
+  // look broken. The chip that cannot apply is dropped rather than obeyed.
+  const allowed = filtersFor(channel);
+  const status = allowed.some((f) => f.key === params.status) ? (params.status ?? '') : '';
 
   const result = await apiFetchListAllowed<MessageLogEntry>('/messages', {
     query: {
       page,
       pageSize: 25,
       status: status || undefined,
-      channel: params.channel || undefined,
+      channel: channel || undefined,
       campaignId: campaignId || undefined,
     },
   });
@@ -135,18 +169,28 @@ export default async function MessagesPage({
   const { data: messages, meta } = result;
   const problems = messages.filter((m) => NEEDS_ATTENTION.has(m.status)).length;
 
-  // Changing the status must not silently drop the campaign the person came in
-  // with, or "Problems" would jump from one campaign to the whole salon.
-  const href = (nextStatus: string) => {
+  // One link builder for both rows: picking a channel keeps the status you
+  // were looking at, and picking a status keeps the channel. Dropping either
+  // would send "Problems on email" back to the whole salon's log.
+  const href = (next: { channel?: string; status?: string; campaignId?: string }) => {
     const query = new URLSearchParams();
-    if (nextStatus) query.set('status', nextStatus);
-    if (campaignId) query.set('campaignId', campaignId);
+    const nextChannel = next.channel ?? channel;
+    const nextStatus = next.status ?? status;
+    const nextCampaign = next.campaignId ?? campaignId;
+    if (nextChannel) query.set('channel', nextChannel);
+    // A status that does not exist on the channel being moved to is dropped
+    // here too, so the link never points at an empty table.
+    if (nextStatus && filtersFor(nextChannel).some((f) => f.key === nextStatus)) query.set('status', nextStatus);
+    if (nextCampaign) query.set('campaignId', nextCampaign);
     const qs = query.toString();
     return qs ? `/messages?${qs}` : '/messages';
   };
 
   // The campaign's own name, taken from the rows rather than fetched again.
   const campaignName = campaignId ? messages.find((m) => m.campaign)?.campaign?.name : undefined;
+
+  // "12 email messages" reads better than "12 messages" under an Email tab.
+  const channelWord = CHANNELS.find((c) => c.key === channel && c.key)?.label.toLowerCase() ?? '';
 
   return (
     <>
@@ -164,17 +208,35 @@ export default async function MessagesPage({
           <span className="rounded-full bg-brand-50 px-2.5 py-1 font-medium text-brand-700 ring-1 ring-inset ring-brand-200">
             {campaignName ?? 'One campaign'}
           </span>
-          <Link href={status ? `/messages?status=${encodeURIComponent(status)}` : '/messages'} className="text-ink-muted hover:underline">
+          <Link href={href({ campaignId: '' })} className="text-ink-muted hover:underline">
             Show every message
           </Link>
         </div>
       ) : null}
 
-      <div className="mb-5 flex w-fit flex-wrap rounded-lg border border-stone-300 bg-white p-0.5 shadow-sm">
-        {FILTERS.map((item) => (
+      {/* Channel first: it is the bigger division, and it changes which status
+          chips below even make sense. */}
+      <div className="mb-3 flex w-fit flex-wrap gap-1 border-b border-stone-200">
+        {CHANNELS.map((item) => (
           <Link
             key={item.key || 'all'}
-            href={href(item.key)}
+            href={href({ channel: item.key })}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+              channel === item.key
+                ? 'border-brand-600 text-brand-700'
+                : 'border-transparent text-ink-muted hover:text-ink'
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
+
+      <div className="mb-5 flex w-fit flex-wrap rounded-lg border border-stone-300 bg-white p-0.5 shadow-sm">
+        {allowed.map((item) => (
+          <Link
+            key={item.key || 'all'}
+            href={href({ status: item.key })}
             className={`rounded-md px-3 py-1.5 text-xs font-medium ${
               status === item.key ? 'bg-brand-50 text-brand-700' : 'text-ink-muted hover:text-ink'
             }`}
@@ -186,7 +248,7 @@ export default async function MessagesPage({
 
       <Card>
         <CardHeader
-          title={`${meta?.total ?? messages.length} messages`}
+          title={`${meta?.total ?? messages.length} ${channelWord ? `${channelWord} ` : ''}messages`}
           subtitle={
             problems > 0
               ? `${problems} on this page need a look — the reason is in the last column`
@@ -197,7 +259,7 @@ export default async function MessagesPage({
         {messages.length === 0 ? (
           <EmptyState
             icon={MessageSquare}
-            title="Nothing sent yet"
+            title={channelWord ? `Nothing sent on ${channelWord} yet` : 'Nothing sent yet'}
             description="Messages appear here the moment they are queued, whether or not they reach the customer."
           />
         ) : (
@@ -206,7 +268,7 @@ export default async function MessagesPage({
               <THead>
                 <TR>
                   <TH>To</TH>
-                  <TH>Channel</TH>
+                  {channel ? null : <TH>Channel</TH>}
                   {/* Every row would say the same campaign — the chip above
                       already says which one. */}
                   {campaignId ? null : <TH>Campaign</TH>}
@@ -237,7 +299,7 @@ export default async function MessagesPage({
                         </div>
                       </TD>
 
-                      <TD className="text-xs text-ink-muted">{message.channel}</TD>
+                      {channel ? null : <TD className="text-xs text-ink-muted">{message.channel}</TD>}
 
                       {campaignId ? null : (
                       <TD className="text-xs">
@@ -288,7 +350,11 @@ export default async function MessagesPage({
                 pageSize={meta.pageSize}
                 total={meta.total}
                 basePath="/messages"
-                searchParams={{ status: status || undefined, campaignId: campaignId || undefined }}
+                searchParams={{
+                  status: status || undefined,
+                  channel: channel || undefined,
+                  campaignId: campaignId || undefined,
+                }}
               />
             ) : null}
           </>
