@@ -658,6 +658,26 @@ export interface Segment {
   _count?: { campaigns: number };
 }
 
+export type MessageStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'CANCELLED';
+
+/** One message, as the log records it — including why it did not arrive. */
+export interface MessageLogEntry {
+  id: string;
+  channel: 'WHATSAPP' | 'SMS' | 'EMAIL';
+  status: MessageStatus;
+  toAddress: string;
+  renderedBody: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  providerMessageId: string | null;
+  queuedAt: string;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+  customer: { id: string; firstName: string; lastName: string | null; phone: string } | null;
+  template: { id: string; name: string; category: string } | null;
+}
+
 export interface MessageTemplate {
   id: string;
   name: string;

@@ -154,6 +154,45 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
                 <Input id={id} value={form.providerTemplateName} onChange={(e) => set('providerTemplateName', e.target.value)} className="font-mono" />
               )}
             </Field>
+
+            {/*
+              WhatsApp treats a template's language as part of its identity: to
+              Meta, "hello_world" in en and "hello_world" in en_US are two
+              different templates. Sending the wrong one fails with
+              "(#132001) Template name does not exist in the translation" —
+              which reads like the name is wrong when the name is fine.
+
+              This has to match the language column in WhatsApp Manager exactly.
+              Meta's own sample templates are en_US, and a template written in
+              Hindi is hi, not hi_IN.
+            */}
+            <Field label="Template language" hint="Must match WhatsApp Manager exactly">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  value={form.language}
+                  onChange={(e) => set('language', e.target.value.trim())}
+                  placeholder="en_US"
+                  list="wa-language-codes"
+                  className="font-mono"
+                />
+              )}
+            </Field>
+
+            <datalist id="wa-language-codes">
+              <option value="en_US">English (US) — Meta's sample templates</option>
+              <option value="en">English</option>
+              <option value="en_GB">English (UK)</option>
+              <option value="hi">Hindi</option>
+              <option value="mr">Marathi</option>
+              <option value="ta">Tamil</option>
+              <option value="te">Telugu</option>
+              <option value="bn">Bengali</option>
+              <option value="gu">Gujarati</option>
+              <option value="kn">Kannada</option>
+              <option value="ml">Malayalam</option>
+              <option value="pa">Punjabi</option>
+            </datalist>
           </div>
 
           <Field label="Message" required hint="Use {{variable}} placeholders">

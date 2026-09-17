@@ -20,6 +20,7 @@ import {
   Target,
   Users,
   Wallet,
+  Send,
   Workflow,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -87,6 +88,9 @@ export const NAV: NavGroup[] = [
       { href: '/journeys', label: 'Journeys', icon: Workflow, permissions: [P.CAMPAIGN_VIEW], feature: 'journeys' },
       { href: '/templates', label: 'Templates', icon: BadgePercent, permissions: [P.CAMPAIGN_VIEW] },
       { href: '/automations', label: 'Automations', icon: Workflow, permissions: [P.CAMPAIGN_VIEW] },
+      // Sits next to the things that send, because it is where you find out
+      // whether they did.
+      { href: '/messages', label: 'Messages', icon: Send, permissions: [P.CAMPAIGN_VIEW] },
       { href: '/feedback', label: 'Feedback', icon: MessageSquareHeart, permissions: [P.FEEDBACK_VIEW] },
     ],
   },

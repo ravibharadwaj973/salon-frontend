@@ -137,7 +137,11 @@ export function ShareSheet({
         templateId: templateId || undefined,
         body: templateId && !edited ? undefined : body,
       });
-      toast.success(`Sent to ${target.name}`);
+      // Not "Sent". /messages/send queues the message; the worker hands it to
+      // WhatsApp a moment later, and the provider can still refuse it. Saying
+      // "sent" here is how a message that never arrived came to look exactly
+      // like one that did.
+      toast.success(`Queued for ${target.name} — see Messages for delivery`);
       onClose();
     } catch (error) {
       toast.error(errorMessage(error));
