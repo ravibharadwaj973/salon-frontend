@@ -28,7 +28,8 @@ export type FieldInput =
   | 'staff'
   | 'branch'
   | 'tag'
-  | 'text';
+  | 'text'
+  | 'lifecycle';
 
 export interface FieldDefinition {
   key: string;
@@ -106,6 +107,28 @@ export function ConditionValue({
       return picker(
         MONTHS.map((label, index) => ({ value: String(index + 1), label })),
         'Pick a month…',
+      );
+
+    /**
+     * Where a customer sits against their OWN visit cycle. Labelled the way an
+     * owner would say it out loud, and ordered the way a customer travels
+     * through it, so the list itself explains the idea.
+     */
+    case 'lifecycle':
+      return picker(
+        [
+          { value: 'NEW', label: 'New — one visit, recently' },
+          { value: 'ONE_TIME', label: 'One-time — came once, never back' },
+          { value: 'ACTIVE', label: 'Active — inside their usual gap' },
+          { value: 'DUE_SOON', label: 'Due soon — approaching their gap' },
+          { value: 'DUE', label: 'Due — at their usual gap now' },
+          { value: 'OVERDUE', label: 'Overdue — a little past it' },
+          { value: 'AT_RISK', label: 'At risk — well past it' },
+          { value: 'LAPSED', label: 'Lapsed — more than twice their gap' },
+          { value: 'DORMANT', label: 'Dormant — over a year' },
+          { value: 'NEVER_VISITED', label: 'Never visited' },
+        ],
+        'Any stage',
       );
 
     case 'tier':
