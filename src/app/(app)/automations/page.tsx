@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { apiFetchAllowed } from '@/lib/api';
 import { PageHeader } from '@/components/ui/display';
 import { AutomationList } from './automation-list';
+import { NewAutomation } from './new-automation';
 import type { Automation } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,7 @@ export default async function AutomationsPage() {
     <>
       <PageHeader
         title="Automations"
+        action={<NewAutomation />}
         description="Messages that go out on their own. You decide when each one fires — and you can switch any of them off."
       />
       <AutomationList automations={automations} />

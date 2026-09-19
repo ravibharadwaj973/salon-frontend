@@ -1,15 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Info, Settings2 } from 'lucide-react';
-import { apiPatch, errorMessage } from '@/lib/client';
+import { apiGet, apiPatch, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Badge, Card, CardBody, EmptyState } from '@/components/ui/display';
-import { Field, Input } from '@/components/ui/form';
+import { Field, Input, Select } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
-import type { Automation } from '@/lib/types';
+import type { Automation, MessageTemplate } from '@/lib/types';
+
+const CHANNELS = ['WHATSAPP', 'SMS', 'EMAIL'] as const;
+type ChannelKey = (typeof CHANNELS)[number];
+const CHANNEL_LABEL: Record<ChannelKey, string> = { WHATSAPP: 'WhatsApp', SMS: 'SMS', EMAIL: 'Email' };
 
 /** Minutes are how the system stores a delay; nobody thinks in 1,440 of them. */
 function humanDelay(minutes: number): string {
@@ -29,7 +33,41 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
 
   const [editing, setEditing] = useState<Automation | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [form, setForm] = useState({ days: '', sendAfterHour: '', sendBeforeHour: '', stepDelays: {} as Record<string, string> });
+  const [form, setForm] = useState({
+    days: '',
+    sendAfterHour: '',
+    sendBeforeHour: '',
+    stepDelays: {} as Record<string, string>,
+    /** Which channel each step sends on — the salon's choice, per step. */
+    stepChannels: {} as Record<string, string>,
+    stepTemplates: {} as Record<string, string>,
+  });
+
+  /**
+   * The salon's own templates, by channel, so the picker only offers messages
+   * that can actually be sent on the channel chosen. A WhatsApp template on an
+   * email step is rejected by the API; better not to offer it at all.
+   */
+  const [templates, setTemplates] = useState<Record<string, MessageTemplate[]>>({});
+
+  useEffect(() => {
+    if (!editing) return;
+    let cancelled = false;
+
+    Promise.all(
+      CHANNELS.map((channel) =>
+        apiGet<MessageTemplate[]>('templates', { query: { channel, pageSize: 100 } })
+          .then((rows) => [channel, rows ?? []] as const)
+          .catch(() => [channel, [] as MessageTemplate[]] as const),
+      ),
+    ).then((pairs) => {
+      if (!cancelled) setTemplates(Object.fromEntries(pairs));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editing]);
 
   function open(automation: Automation) {
     setEditing(automation);
@@ -38,6 +76,8 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
       sendAfterHour: automation.sendAfterHour === null ? '' : String(automation.sendAfterHour),
       sendBeforeHour: automation.sendBeforeHour === null ? '' : String(automation.sendBeforeHour),
       stepDelays: Object.fromEntries(automation.steps.map((s) => [s.id, String(s.delayMinutes)])),
+      stepChannels: Object.fromEntries(automation.steps.map((s) => [s.id, s.channel ?? ''])),
+      stepTemplates: Object.fromEntries(automation.steps.map((s) => [s.id, s.template?.id ?? ''])),
     });
   }
 
@@ -65,8 +105,16 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
         stepDelays: Object.fromEntries(
           Object.entries(form.stepDelays).map(([id, value]) => [id, Number(value || 0)]),
         ),
+        // Only steps that actually have a channel set are sent, so a step that
+        // does something other than send a message is left alone.
+        stepChannels: Object.fromEntries(
+          Object.entries(form.stepChannels).filter(([, value]) => value !== ''),
+        ),
+        stepTemplates: Object.fromEntries(
+          Object.entries(form.stepTemplates).map(([id, value]) => [id, value === '' ? null : value]),
+        ),
       });
-      toast.success('Timing updated');
+      toast.success('Automation updated');
       setEditing(null);
       router.refresh();
     } catch (error) {
@@ -80,7 +128,7 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
     return (
       <EmptyState
         title="No automations yet"
-        description="Automations are created when your salon is set up. Ask us if this list is empty."
+        description="Your salon starts with a few ready-made ones. Build your own with New automation above — a trigger, a wait, and a message."
       />
     );
   }
@@ -132,7 +180,7 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
               <div className="flex shrink-0 items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={() => open(automation)}>
                   <Settings2 className="h-4 w-4" />
-                  Timing
+                  Settings
                 </Button>
                 <Button
                   variant={automation.isActive ? 'ghost' : 'primary'}
@@ -151,7 +199,7 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
       <Modal
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing ? `${editing.name} — timing` : ''}
+        title={editing ? editing.name : ''}
         description={editing?.help || undefined}
         footer={
           <>
@@ -159,7 +207,7 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
               Cancel
             </Button>
             <Button onClick={save} loading={busy !== null}>
-              Save timing
+              Save changes
             </Button>
           </>
         }
@@ -188,32 +236,92 @@ export function AutomationList({ automations }: { automations: Automation[] }) {
 
             {editing.steps.length > 1 || editing.steps.some((s) => s.delayMinutes > 0) ? (
               <div>
-                <p className="mb-2 text-xs font-medium text-ink">Wait before each step</p>
-                <div className="space-y-2.5">
-                  {editing.steps.map((step, index) => (
-                    <div key={step.id} className="flex items-center gap-3">
-                      <span className="w-5 shrink-0 text-2xs text-ink-subtle">{index + 1}.</span>
-                      <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">
-                        {step.template ? step.template.name : step.actionType.replace(/_/g, ' ').toLowerCase()}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <Input
-                          type="number"
-                          min={0}
-                          value={form.stepDelays[step.id] ?? '0'}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, stepDelays: { ...f.stepDelays, [step.id]: e.target.value } }))
-                          }
-                          className="tnum w-20 text-right"
-                          aria-label={`Delay for step ${index + 1}`}
-                        />
-                        <span className="text-2xs text-ink-subtle">min</span>
+                <p className="mb-2 text-xs font-medium text-ink">Each step</p>
+                <div className="space-y-3">
+                  {editing.steps.map((step, index) => {
+                    const channel = form.stepChannels[step.id] ?? '';
+                    const sendsMessage = step.actionType === 'SEND_MESSAGE';
+                    const forChannel = templates[channel] ?? [];
+
+                    return (
+                      <div key={step.id} className="rounded-lg border border-stone-200 p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="text-2xs text-ink-subtle">{index + 1}.</span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink">
+                            {step.actionType.replace(/_/g, ' ').toLowerCase()}
+                          </span>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={form.stepDelays[step.id] ?? '0'}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, stepDelays: { ...f.stepDelays, [step.id]: e.target.value } }))
+                            }
+                            className="tnum w-20 text-right"
+                            aria-label={`Delay for step ${index + 1}`}
+                          />
+                          <span className="text-2xs text-ink-subtle">min</span>
+                        </div>
+
+                        {sendsMessage ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {/* The salon's choice. WhatsApp is what gets read
+                                in India, but a corporate book may want email
+                                and a salon without a WhatsApp number needs
+                                SMS. Changing it clears the template, because
+                                templates belong to one channel. */}
+                            <Select
+                              value={channel}
+                              aria-label={`Channel for step ${index + 1}`}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  stepChannels: { ...f.stepChannels, [step.id]: e.target.value },
+                                  stepTemplates: { ...f.stepTemplates, [step.id]: '' },
+                                }))
+                              }
+                            >
+                              <option value="">Pick a channel…</option>
+                              {CHANNELS.map((c) => (
+                                <option key={c} value={c}>
+                                  {CHANNEL_LABEL[c]}
+                                </option>
+                              ))}
+                            </Select>
+
+                            <Select
+                              value={form.stepTemplates[step.id] ?? ''}
+                              aria-label={`Template for step ${index + 1}`}
+                              disabled={!channel}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  stepTemplates: { ...f.stepTemplates, [step.id]: e.target.value },
+                                }))
+                              }
+                            >
+                              <option value="">
+                                {!channel
+                                  ? 'Pick a channel first'
+                                  : forChannel.length === 0
+                                    ? `No ${CHANNEL_LABEL[channel as ChannelKey]} templates yet`
+                                    : 'No template — free text'}
+                              </option>
+                              {forChannel.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                        ) : null}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <p className="mt-1.5 text-2xs text-ink-subtle">
-                  In minutes — 60 is an hour, 1440 a day, 10080 a week.
+                  Delays are in minutes — 60 is an hour, 1440 a day, 10080 a week. A step only reaches customers
+                  who can be contacted on its channel and have not opted out.
                 </p>
               </div>
             ) : null}
