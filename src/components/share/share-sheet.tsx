@@ -27,7 +27,7 @@ interface SharePreview {
   templateName: string | null;
   unresolved: string[];
   consent: { allowed: boolean; status: string; reason: string | null };
-  delivery: { live: boolean; source: string; reason: string | null };
+  delivery: { live: boolean; source: string; reason: string | null; simulated?: boolean };
   quota: { meter: string | null; available: number | null };
   whatsappLink: string | null;
 }
@@ -283,7 +283,10 @@ export function ShareSheet({
           </Warning>
         ) : null}
 
-        {preview && !preview.delivery.live ? (
+        {/* Shown when the channel is not connected AND when it is simulated:
+            a simulated send is "live" as far as the queue is concerned, which
+            is exactly why the person pressing the button has to be told. */}
+        {preview && (!preview.delivery.live || preview.delivery.simulated) ? (
           <Warning tone="amber">{preview.delivery.reason}</Warning>
         ) : null}
 
