@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Badge, Card, CardBody, CardHeader, EmptyState, StatTile, StatusBadge } from '@/components/ui/display';
+import { CampaignFunnel, type FunnelStage } from './funnel';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { count, dateTime, fullName, money, percent } from '@/lib/format';
 import type { Campaign, Customer, Money } from '@/lib/types';
@@ -78,6 +79,43 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       </header>
+
+      {/* Where the campaign leaks. Stages that cannot be measured on this
+          channel are left out rather than shown as a misleading zero. */}
+      <Card className="mb-3">
+        <CardHeader
+          title="What happened to the messages"
+          subtitle="Each stage as a share of the one before it — that is where the drop-off actually is."
+        />
+        <CardBody>
+          <CampaignFunnel
+            stages={
+              [
+                { key: 'targeted', label: 'Targeted', value: campaign.targetCount, sequential: true },
+                { key: 'sent', label: 'Sent', value: campaign.sentCount, sequential: true },
+                { key: 'delivered', label: 'Delivered', value: campaign.deliveredCount, sequential: true },
+                campaign.channel === 'SMS'
+                  ? null
+                  : {
+                      key: 'read',
+                      label: campaign.channel === 'EMAIL' ? 'Opened' : 'Read',
+                      value: campaign.readCount,
+                      sequential: true,
+                      note:
+                        campaign.channel === 'EMAIL'
+                          ? 'an open is not a guaranteed read'
+                          : undefined,
+                    },
+                { key: 'clicked', label: 'Clicked a link', value: campaign.clickedCount },
+                campaign.channel === 'EMAIL'
+                  ? null
+                  : { key: 'replied', label: 'Replied', value: campaign.repliedCount },
+                { key: 'bookings', label: 'Booked', value: campaign.bookingCount },
+              ].filter(Boolean) as FunnelStage[]
+            }
+          />
+        </CardBody>
+      </Card>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Sent" value={count(campaign.sentCount)} hint={`of ${count(campaign.targetCount)} targeted`} />

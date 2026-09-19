@@ -724,6 +724,8 @@ export interface Campaign {
   deliveredCount: number;
   readCount: number;
   clickedCount: number;
+  /** Customers who wrote back. WhatsApp and SMS only — an email reply goes to the salon's inbox, not to us. */
+  repliedCount: number;
   failedCount: number;
   bookingCount: number;
   revenue: Money;
