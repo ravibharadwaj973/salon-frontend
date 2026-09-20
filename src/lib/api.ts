@@ -2,7 +2,10 @@ import 'server-only';
 import { getAccessToken, getActiveBranchId } from './session';
 import type { ApiErrorBody, Envelope, PageMeta } from './types';
 
-export const API_URL = process.env.API_URL ?? 'https://parlon.jharavi.in';
+// Accepts API_URL or NEXT_PUBLIC_API_URL, and refuses a localhost value in a
+// production build — see origins.ts for why that matters.
+export { API_URL } from './origins';
+import { API_URL } from './origins';
 
 export class ApiError extends Error {
   constructor(

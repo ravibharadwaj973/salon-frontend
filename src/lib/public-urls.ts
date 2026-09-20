@@ -12,10 +12,15 @@ const trim = (value: string) => value.replace(/\/+$/, '');
 
 /** Where this app is served to the public. */
 export function appOrigin(): string {
-  return trim(process.env.PUBLIC_APP_URL ?? 'http://localhost:3000');
+  return trim(process.env.NEXT_PUBLIC_APP_URL ?? process.env.PUBLIC_APP_URL ?? 'http://localhost:3000');
 }
 
-/** Where the API is reachable from a stranger's browser, not from this server. */
+/**
+ * Where the API is reachable from a stranger's browser — which is not always
+ * where this server reaches it. API_URL may point at an internal address behind
+ * the proxy; the snippet we hand a salon has to work from the open internet, so
+ * NEXT_PUBLIC_API_URL wins when the two differ.
+ */
 export function publicApiOrigin(): string {
   return trim(process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? 'http://localhost:4000/api/v1');
 }

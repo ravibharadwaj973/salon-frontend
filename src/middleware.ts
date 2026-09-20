@@ -34,7 +34,14 @@ export async function middleware(request: NextRequest) {
 
   if (refreshToken) {
     try {
-      const apiUrl = process.env.API_URL ?? 'http://localhost:4000/api/v1';
+      // Both names, for the same reason as origins.ts: setting one and not the
+      // other is easy, and getting it wrong here silently breaks every token
+      // refresh. No throw — this runs on every request, so failing hard would
+      // take the login page down with it and hide the reason.
+      const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(
+        /\/+$/,
+        '',
+      );
       const refreshed = await fetch(`${apiUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
