@@ -1074,8 +1074,24 @@ export interface Automation {
 
 export type SetupStatus = 'NOT_CONNECTED' | 'PENDING' | 'CONNECTED' | 'FAILED';
 
+/**
+ * Whether a channel can send this second, which is not the same as whether the
+ * salon has filled the form in: the server may be sending through the
+ * platform's own account. `status` describes the salon's row, `delivery`
+ * describes reality — gate the Send test button on `delivery.live`.
+ */
+export interface ChannelDelivery {
+  live: boolean;
+  source: 'tenant' | 'environment' | 'none';
+  /** When not live, what is actually absent — shown to whoever has to fix it. */
+  missing: string | null;
+  /** True when messages are recorded and tracked but nothing is delivered. */
+  simulated: boolean;
+}
+
 export interface MessagingSetup {
   whatsapp: {
+    delivery: ChannelDelivery;
     status: SetupStatus;
     phoneNumberId: string | null;
     businessId: string | null;
@@ -1084,6 +1100,7 @@ export interface MessagingSetup {
     verifiedAt: string | null;
   };
   sms: {
+    delivery: ChannelDelivery;
     status: SetupStatus;
     senderId: string | null;
     dltEntityId: string | null;
@@ -1091,6 +1108,7 @@ export interface MessagingSetup {
     apiKey: string | null;
   };
   email: {
+    delivery: ChannelDelivery;
     status: SetupStatus;
     fromName: string | null;
     fromAddress: string | null;
