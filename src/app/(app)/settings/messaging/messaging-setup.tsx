@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/form';
 import { useToast } from '@/components/ui/overlay';
+import { CheckWhatsApp } from './check-whatsapp';
 import type { ChannelDelivery, MessagingSetup, SetupStatus } from '@/lib/types';
 
 /**
@@ -214,6 +215,8 @@ export function MessagingSetupForm({ setup }: { setup: MessagingSetup }) {
           </p>
 
           <MissingNote delivery={setup.whatsapp.delivery} />
+
+          <CheckWhatsApp />
 
           <div className="sm:col-span-2 flex justify-end gap-2">
             <Button
