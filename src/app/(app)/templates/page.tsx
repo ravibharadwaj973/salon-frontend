@@ -4,6 +4,9 @@ import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/display';
 import { TemplateEditor } from './template-editor';
 import { RestoreDefaults } from './restore-defaults';
+import { SyncFromMeta } from './sync-from-meta';
+import { SubmitToMeta } from './submit-to-meta';
+import { MetaStatusBadge, metaHelp } from './meta-status';
 import type { MessageTemplate, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Message templates' };
@@ -26,6 +29,13 @@ export default async function TemplatesPage() {
   const emptyChannels = (['WHATSAPP', 'EMAIL', 'SMS'] as const).filter(
     (channel) => !templates.some((template) => template.channel === channel),
   );
+  /**
+   * WhatsApp templates Meta will not deliver. Named on the page rather than
+   * left to be discovered one silent campaign at a time.
+   */
+  const unapproved = templates.filter(
+    (template) => template.channel === 'WHATSAPP' && template.approvalStatus !== 'APPROVED',
+  );
   const utility = templates.filter((template) => template.category !== 'MARKETING');
   const marketing = templates.filter((template) => template.category === 'MARKETING');
 
@@ -36,8 +46,9 @@ export default async function TemplatesPage() {
         description="What your customers actually read. Variables in {{braces}} are filled in at send time."
         action={
           canManage ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {emptyChannels.length > 0 ? <RestoreDefaults label="Add starters" /> : null}
+              <SyncFromMeta />
               <TemplateEditor />
             </div>
           ) : null
@@ -55,6 +66,17 @@ export default async function TemplatesPage() {
           templates, so the template picker is empty on{' '}
           {emptyChannels.length === 1 ? 'that tab' : 'those tabs'} when you send a message. “Add starters” fills the
           gaps with ready-written ones and leaves everything you already have untouched.
+        </div>
+      ) : null}
+
+      {unapproved.length > 0 && canManage ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
+          <strong className="font-semibold">
+            {unapproved.length} WhatsApp template{unapproved.length === 1 ? ' is' : 's are'} not approved by Meta
+          </strong>{' '}
+          — {unapproved.map((t) => t.name).join(', ')}. WhatsApp only delivers templates Meta has approved, so any
+          automation or campaign using one of these sends nothing. Submit each for review, or press “Sync with Meta” if
+          you already created them in Business Manager.
         </div>
       ) : null}
 
@@ -118,18 +140,31 @@ function TemplateGroup({
                   </Badge>
                 </div>
               </div>
-              <Badge tone={template.approvalStatus === 'APPROVED' ? 'success' : 'neutral'}>
-                {template.approvalStatus.toLowerCase()}
-              </Badge>
+              <MetaStatusBadge status={template.approvalStatus} channel={template.channel} />
             </div>
 
             <div className="flex-1 p-4">
               <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-muted">{template.bodyText}</p>
+
+              {template.channel === 'WHATSAPP' && template.approvalStatus !== 'APPROVED' ? (
+                <p className="mt-3 text-2xs leading-relaxed text-ink-subtle">{metaHelp(template.approvalStatus)}</p>
+              ) : null}
+
+              {/* Meta's own sentence. It names the thing to change; a summary
+                  of it does not. */}
+              {template.rejectedReason ? (
+                <p className="mt-2 rounded-md bg-rose-50 p-2 text-2xs leading-relaxed text-rose-900">
+                  <strong className="font-semibold">Meta’s reason:</strong> {template.rejectedReason}
+                </p>
+              ) : null}
             </div>
 
             {canManage ? (
               <div className="border-t border-stone-200 px-4 py-2.5">
-                <TemplateEditor template={template} compact />
+                <div className="flex flex-wrap items-center gap-2">
+                  <TemplateEditor template={template} compact />
+                  <SubmitToMeta template={template} />
+                </div>
               </div>
             ) : null}
           </Card>

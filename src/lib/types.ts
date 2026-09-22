@@ -699,6 +699,14 @@ export interface MessageLogEntry {
   campaign: { id: string; name: string } | null;
 }
 
+/**
+ * Meta's verdict on a WhatsApp template.
+ *
+ * PAUSED and DISABLED come from Meta when a template's quality rating drops;
+ * neither can carry a message, so neither may be folded into APPROVED.
+ */
+export type TemplateApprovalStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAUSED' | 'DISABLED';
+
 export interface MessageTemplate {
   id: string;
   name: string;
@@ -706,10 +714,36 @@ export interface MessageTemplate {
   category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION' | 'SERVICE';
   language: string;
   providerTemplateName: string | null;
+  /** Meta's id, present only once the template exists on a WABA. */
+  providerTemplateId: string | null;
+  /** Meta's own words. Not paraphrased — the salon has to fix what Meta named. */
+  rejectedReason: string | null;
+  submittedAt: string | null;
+  syncedAt: string | null;
   bodyText: string;
   variables: string[];
-  approvalStatus: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvalStatus: TemplateApprovalStatus;
   isActive: boolean;
+}
+
+/** What came back from pressing Submit to Meta. */
+export interface MetaSubmitOutcome {
+  ok: boolean;
+  sent?: { name: string; language: string; category: string; body: string };
+  meta?: { id?: string; status?: string; message?: string; code?: number; subcode?: number };
+  /** Things we refused to send, so Meta never saw them. */
+  problems?: string[];
+  source?: string;
+}
+
+export interface MetaSyncOutcome {
+  ok: boolean;
+  checked: number;
+  updated: { name: string; from: string; to: string; rejectedReason: string | null }[];
+  onlyOnMeta: { name: string; status: string; language: string }[];
+  notSubmitted: string[];
+  source?: string;
+  error?: string;
 }
 
 export interface Campaign {
