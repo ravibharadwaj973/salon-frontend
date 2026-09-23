@@ -18,13 +18,22 @@
 
 const trim = (value: string) => value.replace(/\/+$/, '');
 
-function resolve(name: string, candidates: (string | undefined)[], fallback: string): string {
+function resolve(name: string, candidates: (string | undefined)[], fallback: string, accepts: string[]): string {
   const value = trim(candidates.find((candidate) => candidate && candidate.trim())?.trim() || fallback);
 
   if (process.env.NODE_ENV === 'production' && /localhost|127\.0\.0\.1/.test(value)) {
+    /**
+     * Next.js evaluates route modules to collect page data, so this surfaces
+     * as "Failed to collect page data for /api/auth/login" with a stack and
+     * the reason several lines above it — easy to scroll past. So the message
+     * names the variables to set rather than describing the problem, because
+     * whoever reads it wants the next action, not a diagnosis.
+     */
     throw new Error(
-      `${name} is ${value} in a production build. Nothing on the public internet can reach that. ` +
-        `Set it in your deployment's environment variables.`,
+      `${name} is ${value} in a production build. Nothing on the public internet can reach that.\n` +
+        `Set ${accepts.join(' or ')} in your deployment's environment variables ` +
+        `(on Vercel: Settings -> Environment Variables, ticked for Production, Preview AND Development), ` +
+        `then redeploy — adding a variable does not rebuild on its own.`,
     );
   }
 
@@ -36,6 +45,7 @@ export const API_URL = resolve(
   'API_URL',
   [process.env.API_URL, process.env.NEXT_PUBLIC_API_URL],
   'http://localhost:4000/api/v1',
+  ['API_URL', 'NEXT_PUBLIC_API_URL'],
 );
 
 /** This API, as reached from a stranger's browser. */
@@ -43,6 +53,7 @@ export const PUBLIC_API_URL = resolve(
   'NEXT_PUBLIC_API_URL',
   [process.env.NEXT_PUBLIC_API_URL, process.env.API_URL],
   'http://localhost:4000/api/v1',
+  ['NEXT_PUBLIC_API_URL', 'API_URL'],
 );
 
 /**
@@ -56,4 +67,5 @@ export const APP_URL = resolve(
   'PUBLIC_APP_URL',
   [process.env.PUBLIC_APP_URL, process.env.NEXT_PUBLIC_APP_URL],
   'http://localhost:3000',
+  ['PUBLIC_APP_URL', 'NEXT_PUBLIC_APP_URL'],
 );
