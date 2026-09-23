@@ -101,7 +101,7 @@ export function ButtonEditor({
             </Button>
           </div>
 
-          <Field label="Label" hint="What the customer taps — 25 characters at most">
+          <Field label="Button text" hint="The words on the button — 25 characters at most">
             {({ id }) => (
               <Input
                 id={id}
@@ -115,12 +115,20 @@ export function ButtonEditor({
 
           {button.type === 'URL' ? (
             <div className="grid gap-2 sm:grid-cols-2">
-              <Field label="Address" hint={button.variable ? 'Must end with / — the value is added after it' : 'The page this opens'}>
+              <Field
+                label="Link (URL)"
+                hint={
+                  button.variable
+                    ? 'Must end with / — the value below is added onto the end of it'
+                    : 'The full web address this opens'
+                }
+              >
                 {({ id }) => (
                   <Input
                     id={id}
                     value={button.url}
                     onChange={(e) => update(index, { url: e.target.value })}
+                    placeholder="https://parlon.jharavi.in/invoice/"
                     className="font-mono text-xs"
                   />
                 )}
@@ -141,17 +149,23 @@ export function ButtonEditor({
                   </Select>
                 )}
               </Field>
-              {button.variable ? (
-                <p className="sm:col-span-2 font-mono text-2xs text-ink-muted">
-                  {button.url}
-                  <span className="rounded bg-brand-100 px-1 text-brand-800">{`{{${button.variable}}}`}</span>
+              <div className="sm:col-span-2 rounded-md bg-white p-2.5 ring-1 ring-stone-200">
+                <p className="text-2xs text-ink-subtle">The customer sees</p>
+                <p className="mt-1 rounded border border-stone-200 py-1.5 text-center text-xs font-medium text-brand-700">
+                  {button.text || 'Button text'}
                 </p>
-              ) : null}
+                <p className="mt-1.5 break-all font-mono text-2xs text-ink-muted">
+                  opens {button.url || 'https://…'}
+                  {button.variable ? (
+                    <span className="rounded bg-brand-100 px-1 text-brand-800">{`{{${button.variable}}}`}</span>
+                  ) : null}
+                </p>
+              </div>
             </div>
           ) : null}
 
           {button.type === 'PHONE_NUMBER' ? (
-            <Field label="Number" hint="With the country code">
+            <Field label="Phone number" hint="With the country code">
               {({ id }) => (
                 <Input
                   id={id}
