@@ -120,11 +120,32 @@ function outcome(message: MessageLogEntry): { text: string; tone: string } {
           tone: 'text-amber-700',
         };
       }
+      /**
+       * Waiting for a receipt is normal for a few seconds and suspicious after
+       * an hour, and which one it is depends on where this is running — so the
+       * sentence does too.
+       *
+       * The first version of this explained localhost unconditionally, which
+       * is useful on a laptop and nonsense on the salon's screen: an owner
+       * reading "on localhost it never can" about their own message learns
+       * nothing and distrusts the page. Deployment detail belongs in
+       * development; a salon owner gets a fact about their message.
+       */
+      const waitedMs = message.sentAt ? Date.now() - new Date(message.sentAt).getTime() : 0;
+      const stale = waitedMs > 60 * 60 * 1000;
+
+      if (process.env.NODE_ENV !== 'production') {
+        return {
+          text: 'Accepted by the provider. Nothing further will appear until the provider’s webhook can reach this server — running locally it cannot, so a message stops here whether it arrived or not.',
+          tone: 'text-ink-subtle',
+        };
+      }
+
       return {
-        text: id.startsWith('wamid.')
-          ? 'WhatsApp accepted it. Nothing further will appear here until Meta’s webhook can reach this server — on localhost it never can, so a message stops at “sent” whether it arrived or not.'
-          : 'Accepted by the provider. No delivery confirmation yet.',
-        tone: 'text-ink-subtle',
+        text: stale
+          ? 'Accepted by the provider over an hour ago and still no delivery receipt. That usually means the provider cannot reach this server’s webhook, rather than that the message failed.'
+          : 'Accepted by the provider. Waiting for a delivery receipt.',
+        tone: stale ? 'text-amber-700' : 'text-ink-subtle',
       };
     }
     case 'DELIVERED':
