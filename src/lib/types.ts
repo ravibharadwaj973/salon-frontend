@@ -729,6 +729,10 @@ export interface MessageTemplate {
 /** What came back from pressing Submit to Meta. */
 export interface MetaSubmitOutcome {
   ok: boolean;
+  /** Meta already had this name, so we linked to the existing one. */
+  adopted?: boolean;
+  /** Meta accepted it but we could not record that. The two sides disagree. */
+  unsaved?: string;
   sent?: { name: string; language: string; category: string; body: string };
   meta?: { id?: string; status?: string; message?: string; code?: number; subcode?: number; hint?: string };
   /** Things we refused to send, so Meta never saw them. */

@@ -43,8 +43,17 @@ export function SubmitToMeta({ template }: { template: MessageTemplate }) {
     try {
       const outcome = await apiPost<MetaSubmitOutcome>(`templates/${template.id}/submit-to-meta`);
       setResult(outcome);
-      if (outcome.ok) {
-        toast.success(`Meta accepted it — status ${outcome.meta?.status ?? 'PENDING'}`);
+      if (outcome.unsaved) {
+        // The one case where succeeding is worse than failing: Meta has it and
+        // we do not know we have it. Never shown as a success.
+        toast.error('Meta accepted it, but it could not be recorded here — read the note below');
+        router.refresh();
+      } else if (outcome.ok) {
+        toast.success(
+          outcome.adopted
+            ? 'Already on your WhatsApp account — linked to the existing one'
+            : `Meta accepted it — status ${outcome.meta?.status ?? 'PENDING'}`,
+        );
         router.refresh();
       } else {
         toast.error(outcome.problems?.length ? 'Fix the problems listed before submitting' : 'Meta refused it');
@@ -116,15 +125,27 @@ export function SubmitToMeta({ template }: { template: MessageTemplate }) {
             </div>
           ) : null}
 
-          {result.ok ? (
+          {result.unsaved ? (
+            <div className="space-y-1 rounded-lg border-2 border-rose-300 bg-rose-50 p-3 text-rose-900">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Accepted by Meta, but not recorded here
+              </p>
+              <p>{result.unsaved}</p>
+            </div>
+          ) : result.ok ? (
             <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
               <p className="flex items-center gap-1.5 font-semibold">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                Meta accepted it — {result.meta?.status ?? 'PENDING'}
+                {result.adopted
+                  ? `Already on your WhatsApp account — linked to it (${result.meta?.status ?? 'unknown status'})`
+                  : `Meta accepted it — ${result.meta?.status ?? 'PENDING'}`}
               </p>
               <p className="font-mono opacity-80">id {result.meta?.id}</p>
               <p className="opacity-80">
-                It is now in review on your WhatsApp account. Press Sync with Meta to pick up the verdict.
+                {result.adopted
+                  ? 'Meta already held this name, so nothing new was created. Its status here now comes from Meta.'
+                  : 'It is now in review on your WhatsApp account. Press Sync with Meta to pick up the verdict.'}
               </p>
             </div>
           ) : null}
