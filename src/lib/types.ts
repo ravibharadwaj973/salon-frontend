@@ -707,6 +707,18 @@ export interface MessageLogEntry {
  */
 export type TemplateApprovalStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAUSED' | 'DISABLED';
 
+/**
+ * A button under a WhatsApp message.
+ *
+ * On a URL button, `url` is a fixed base and `variable` names the field whose
+ * value Meta appends to it — never a field holding a whole link, or the address
+ * arrives with its origin in it twice.
+ */
+export type TemplateButton =
+  | { type: 'URL'; text: string; url: string; variable?: string | null }
+  | { type: 'QUICK_REPLY'; text: string }
+  | { type: 'PHONE_NUMBER'; text: string; phone: string };
+
 export interface MessageTemplate {
   id: string;
   name: string;
@@ -722,6 +734,7 @@ export interface MessageTemplate {
   syncedAt: string | null;
   bodyText: string;
   variables: string[];
+  buttons: TemplateButton[];
   approvalStatus: TemplateApprovalStatus;
   isActive: boolean;
 }

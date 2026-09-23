@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { Badge } from '@/components/ui/display';
-import type { MessageTemplate } from '@/lib/types';
+import { ButtonEditor } from './button-editor';
+import type { MessageTemplate, TemplateButton } from '@/lib/types';
 
 interface Preview {
   rendered: string;
@@ -32,6 +33,7 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
     language: template?.language ?? 'en',
     providerTemplateName: template?.providerTemplateName ?? '',
     bodyText: template?.bodyText ?? '',
+    buttons: (template?.buttons ?? []) as TemplateButton[],
     approvalStatus: template?.approvalStatus ?? 'DRAFT',
   });
 
@@ -63,6 +65,7 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
         language: form.language,
         providerTemplateName: form.providerTemplateName.trim() || undefined,
         bodyText: form.bodyText,
+        buttons: form.buttons,
         ...(template ? { approvalStatus: form.approvalStatus } : {}),
       };
 
@@ -200,6 +203,10 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
               <Textarea id={id} value={form.bodyText} onChange={(e) => set('bodyText', e.target.value)} rows={5} className="leading-relaxed" />
             )}
           </Field>
+
+          {form.channel === 'WHATSAPP' ? (
+            <ButtonEditor buttons={form.buttons} onChange={(next) => set('buttons', next)} />
+          ) : null}
 
           {template ? (
             <Field label="Provider approval status" hint="Set this once WhatsApp approves it">
