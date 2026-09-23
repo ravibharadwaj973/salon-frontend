@@ -6,6 +6,7 @@ import { RefreshCw } from 'lucide-react';
 import { apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/overlay';
+import { ImportFromMeta } from './import-from-meta';
 import type { MetaSyncOutcome } from '@/lib/types';
 
 /**
@@ -82,11 +83,26 @@ export function SyncFromMeta() {
           ) : null}
 
           {result.onlyOnMeta.length > 0 ? (
-            <p>
-              <strong className="font-semibold text-ink">On Meta but not here:</strong>{' '}
-              {result.onlyOnMeta.map((row) => `${row.name} (${row.status.toLowerCase()})`).join(', ')}. Create a
-              template with the same name to use it.
-            </p>
+            <div className="space-y-1.5">
+              <p className="font-semibold text-ink">On Meta but not here</p>
+              <p>
+                Approved on your WhatsApp account and unknown to this app. Import brings the wording, language and
+                field order across exactly as Meta holds them — which is safer than retyping it, because the number and
+                order of values has to match Meta’s copy or every send is rejected.
+              </p>
+              <ul className="space-y-1.5">
+                {result.onlyOnMeta.map((row) => (
+                  <li key={`${row.name}:${row.language}`} className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-2xs text-ink">{row.name}</span>
+                    <span className="text-ink-subtle">
+                      {row.language} · {row.status.toLowerCase()} · {row.parameters} value
+                      {row.parameters === 1 ? '' : 's'}
+                    </span>
+                    <ImportFromMeta template={row} />
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       ) : null}

@@ -740,11 +740,33 @@ export interface MetaSubmitOutcome {
   source?: string;
 }
 
+/** A template Meta holds that this app has no record of. */
+export interface MetaOnlyTemplate {
+  name: string;
+  status: string;
+  language: string;
+  category: string;
+  /** Meta's wording, with positions already turned into named placeholders. */
+  body: string;
+  parameters: number;
+}
+
+export interface MetaImportOutcome {
+  ok: boolean;
+  templateId?: string;
+  name?: string;
+  language?: string;
+  status?: string;
+  parameters?: number;
+  unmapped?: number[];
+  message: string;
+}
+
 export interface MetaSyncOutcome {
   ok: boolean;
   checked: number;
   updated: { name: string; from: string; to: string; rejectedReason: string | null }[];
-  onlyOnMeta: { name: string; status: string; language: string }[];
+  onlyOnMeta: MetaOnlyTemplate[];
   notSubmitted: string[];
   source?: string;
   error?: string;
