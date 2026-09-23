@@ -72,6 +72,17 @@ export function SyncFromMeta() {
                   <span className="font-mono text-2xs text-ink">{row.name}</span> — {row.from.toLowerCase()} →{' '}
                   <strong className="font-semibold text-ink">{row.to.toLowerCase()}</strong>
                   {row.rejectedReason ? <span className="text-rose-700"> · {row.rejectedReason}</span> : null}
+                  {row.recategorised ? (
+                    <span className="block text-2xs text-amber-800">
+                      Meta filed this as{' '}
+                      <strong className="font-semibold">{row.recategorised.to.toLowerCase()}</strong>, not{' '}
+                      {row.recategorised.from.toLowerCase()} — it judges the category by the wording, not by what was
+                      submitted.
+                      {row.recategorised.to === 'MARKETING'
+                        ? ' Marketing templates now only go to customers who opted in to marketing.'
+                        : null}
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>

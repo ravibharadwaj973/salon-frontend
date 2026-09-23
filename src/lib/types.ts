@@ -778,7 +778,13 @@ export interface MetaImportOutcome {
 export interface MetaSyncOutcome {
   ok: boolean;
   checked: number;
-  updated: { name: string; from: string; to: string; rejectedReason: string | null }[];
+  updated: {
+    name: string;
+    from: string;
+    to: string;
+    rejectedReason: string | null;
+    recategorised?: { from: string; to: string };
+  }[];
   onlyOnMeta: MetaOnlyTemplate[];
   notSubmitted: string[];
   source?: string;
