@@ -730,7 +730,7 @@ export interface MessageTemplate {
 export interface MetaSubmitOutcome {
   ok: boolean;
   sent?: { name: string; language: string; category: string; body: string };
-  meta?: { id?: string; status?: string; message?: string; code?: number; subcode?: number };
+  meta?: { id?: string; status?: string; message?: string; code?: number; subcode?: number; hint?: string };
   /** Things we refused to send, so Meta never saw them. */
   problems?: string[];
   source?: string;

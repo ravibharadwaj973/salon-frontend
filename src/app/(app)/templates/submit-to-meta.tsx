@@ -98,6 +98,12 @@ export function SubmitToMeta({ template }: { template: MessageTemplate }) {
             <div className="space-y-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-900">
               <p className="font-semibold">Meta refused it</p>
               <p className="font-mono">{result.meta.message}</p>
+              {/* Some of Meta's refusals have a better answer than "try again".
+                  A name that already exists is one of them: the template is
+                  there, it just needs adopting. */}
+              {result.meta.hint ? (
+                <p className="rounded-md bg-white/60 p-2 font-medium not-italic">{result.meta.hint}</p>
+              ) : null}
               {result.meta.code ? (
                 <p className="opacity-70">
                   code {result.meta.code}
