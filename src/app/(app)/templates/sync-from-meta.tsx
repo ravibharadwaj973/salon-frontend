@@ -27,7 +27,29 @@ export function SyncFromMeta() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<MetaSyncOutcome | null>(null);
   const [imported, setImported] = useState(0);
-  const [archived, setArchived] = useState<string[]>([]);
+  const [done, setDone] = useState<Record<string, string>>({});
+
+  /**
+   * Archive hides it; Delete destroys the row.
+   *
+   * Both are offered because they answer different things. Archiving keeps the
+   * wording, which is what you want for a template customers actually received.
+   * Deleting is for a test or a mistake, and it is only ever possible here —
+   * where the template is, by definition, no longer on Meta.
+   */
+  async function remove(id: string, name: string, permanent: boolean) {
+    if (permanent && !window.confirm(`Delete "${name}" permanently? Messages already sent keep their wording, but any journey using it will lose its template.`)) {
+      return;
+    }
+    try {
+      await apiDelete(`templates/${id}${permanent ? '?permanent=true' : ''}`);
+      setDone((prev) => ({ ...prev, [id]: permanent ? 'deleted' : 'archived' }));
+      toast.success(`${name} ${permanent ? 'deleted' : 'archived'}`);
+      router.refresh();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }
 
   async function sync() {
     setBusy(true);
@@ -97,9 +119,9 @@ export function SyncFromMeta() {
             <div className="space-y-1.5">
               <p className="font-semibold text-ink">Here but no longer on Meta</p>
               <p>
-                Deleted from your WhatsApp account, so nothing can be sent from them again. Archiving hides a template
-                from this list; anything already sent from it keeps its history, and any journey still pointing at it
-                will say so.
+                Deleted from your WhatsApp account, so nothing can be sent from them again. Archive hides it and keeps
+                the wording on every message already sent from it. Delete removes it here for good — right for a test
+                or a mistake, and only possible because Meta no longer has it.
               </p>
               <ul className="space-y-1.5">
                 {result.removedOnMeta.map((row) => (
@@ -108,25 +130,25 @@ export function SyncFromMeta() {
                     <span className="text-ink-subtle">
                       {row.language} · was {row.wasStatus.toLowerCase()}
                     </span>
-                    {archived.includes(row.id) ? (
-                      <span className="text-emerald-800">archived</span>
+                    {done[row.id] ? (
+                      <span className="text-emerald-800">{done[row.id]}</span>
                     ) : (
-                      <Button
-                        variant="secondary"
-                        className="h-6 px-2 text-2xs"
-                        onClick={async () => {
-                          try {
-                            await apiDelete(`templates/${row.id}`);
-                            setArchived((prev) => [...prev, row.id]);
-                            toast.success(`${row.name} archived`);
-                            router.refresh();
-                          } catch (error) {
-                            toast.error(errorMessage(error));
-                          }
-                        }}
-                      >
-                        Archive
-                      </Button>
+                      <>
+                        <Button
+                          variant="secondary"
+                          className="h-6 px-2 text-2xs"
+                          onClick={() => remove(row.id, row.name, false)}
+                        >
+                          Archive
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-6 px-2 text-2xs text-rose-700"
+                          onClick={() => remove(row.id, row.name, true)}
+                        >
+                          Delete
+                        </Button>
+                      </>
                     )}
                   </li>
                 ))}
