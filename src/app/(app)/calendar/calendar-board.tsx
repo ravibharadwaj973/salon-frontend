@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Globe, Plus, Users } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { apiGet } from '@/lib/client';
 import { Button } from '@/components/ui/button';
@@ -201,10 +201,24 @@ export function CalendarBoard({
             </div>
           </div>
 
+          {/**
+           * Where a booking with no stylist against it ends up — which is most
+           * of what arrives from the website, because a customer picking a time
+           * usually does not pick a person. These have no column to sit in, so
+           * without this strip they would be invisible on the one screen the
+           * salon actually watches.
+           *
+           * Now shows WHO it is for and where it came from. A time and a
+           * service name is not enough to act on: assigning somebody means
+           * knowing whether this is a regular who always sees Priya.
+           */}
           {calendar.unassigned.length > 0 ? (
             <div className="border-t border-stone-200 bg-amber-50/50 px-4 py-3">
-              <p className="mb-2 text-xs font-medium text-amber-800">
-                {calendar.unassigned.length} service{calendar.unassigned.length === 1 ? '' : 's'} with nobody assigned
+              <p className="mb-0.5 text-xs font-medium text-amber-800">
+                {calendar.unassigned.length} booking{calendar.unassigned.length === 1 ? '' : 's'} with nobody assigned
+              </p>
+              <p className="mb-2.5 text-2xs text-amber-800/80">
+                Customers who booked online rarely choose a stylist. Open one to put a name against it.
               </p>
               <div className="flex flex-wrap gap-2">
                 {calendar.unassigned.map((line) => (
@@ -212,9 +226,16 @@ export function CalendarBoard({
                     key={line.id}
                     type="button"
                     onClick={() => setSelectedId(line.appointmentId)}
-                    className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs text-ink hover:bg-amber-50"
+                    className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs text-ink hover:bg-amber-50"
                   >
-                    {time(line.startAt)} · {line.service.name}
+                    <SelfBooked source={line.appointment.source} />
+                    <span className="tnum font-medium">{time(line.startAt)}</span>
+                    <span className="text-ink-muted">
+                      {line.appointment.customer
+                        ? fullName(line.appointment.customer)
+                        : (line.appointment.walkInName ?? 'Walk-in')}
+                    </span>
+                    <span className="text-ink-subtle">· {line.service.name}</span>
                   </button>
                 ))}
               </div>
@@ -249,6 +270,26 @@ export function CalendarBoard({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * Sources a CUSTOMER booked from, as opposed to the salon booking for them.
+ *
+ * The distinction is the useful one at a glance: an appointment somebody at the
+ * front desk entered is already known about, while one that arrived from the
+ * website overnight is news — nobody in the salon has seen it, the customer
+ * chose the time themselves, and it may well have no stylist against it yet.
+ */
+const CUSTOMER_BOOKED = new Set(['ONLINE', 'QR', 'WHATSAPP', 'INSTAGRAM', 'APP']);
+
+function SelfBooked({ source }: { source: string }) {
+  if (!CUSTOMER_BOOKED.has(source)) return null;
+  return (
+    <Globe
+      className="h-2.5 w-2.5 shrink-0 opacity-70"
+      aria-label="Booked by the customer"
+    />
   );
 }
 
@@ -333,7 +374,10 @@ function Column({
               )}
               style={{ top, height: blockHeight }}
             >
-              <span className="block truncate text-2xs font-semibold">{customerName}</span>
+              <span className="flex items-center gap-1 text-2xs font-semibold">
+                <SelfBooked source={line.appointment.source} />
+                <span className="truncate">{customerName}</span>
+              </span>
               {blockHeight > 34 ? (
                 <span className="block truncate text-2xs opacity-80">{line.service.name}</span>
               ) : null}
