@@ -94,11 +94,39 @@ function outcome(message: MessageLogEntry): { text: string; tone: string } {
         text: 'Waiting for the sender. If it stays here, the background worker is not running.',
         tone: 'text-ink-subtle',
       };
-    case 'SENT':
+    case 'SENT': {
+      /**
+       * "Sent" covers two states that look identical and are not.
+       *
+       * The console provider returns ok so that journeys can run without
+       * credentials — which means a message that was only written to a log
+       * file reaches this screen wearing the same badge as one WhatsApp
+       * accepted. Somebody reading "sent" then waits for a delivery receipt
+       * that can never arrive, for a message that never left the building.
+       *
+       * The provider id is the only thing that tells them apart, so it decides
+       * the sentence.
+       */
+      const id = message.providerMessageId ?? '';
+      if (id.startsWith('console_')) {
+        return {
+          text: 'NOT SENT — logged only. This salon had no connected sender, so the message was written to the server log and nothing left the building.',
+          tone: 'text-amber-700',
+        };
+      }
+      if (id.startsWith('sim_')) {
+        return {
+          text: 'NOT SENT — simulated. The pretend carrier recorded this exactly like a real send and delivered nothing.',
+          tone: 'text-amber-700',
+        };
+      }
       return {
-        text: 'Accepted by the provider. No delivery confirmation yet.',
+        text: id.startsWith('wamid.')
+          ? 'WhatsApp accepted it. Nothing further will appear here until Meta’s webhook can reach this server — on localhost it never can, so a message stops at “sent” whether it arrived or not.'
+          : 'Accepted by the provider. No delivery confirmation yet.',
         tone: 'text-ink-subtle',
       };
+    }
     case 'DELIVERED':
       return { text: 'Delivered to the customer.', tone: 'text-emerald-700' };
     case 'READ':
