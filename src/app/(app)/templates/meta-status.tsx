@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/display';
-import type { TemplateApprovalStatus } from '@/lib/types';
+import type { TemplateApprovalStatus, TemplateCategory } from '@/lib/types';
 
 /**
  * Meta's verdict, said plainly.
@@ -38,4 +38,57 @@ export function MetaStatusBadge({ status, channel }: { status: TemplateApprovalS
 
 export function metaHelp(status: TemplateApprovalStatus): string {
   return (META[status] ?? META.DRAFT).help;
+}
+
+/**
+ * The category, and who decided it.
+ *
+ * Meta re-reads the wording at review and files a template under the category
+ * its CONTENT belongs to, ignoring the one submitted: a review request or a
+ * "book your next session" sent up as utility comes back marketing. That is
+ * not cosmetic — marketing templates only reach customers who opted in to
+ * marketing, and they cost more per conversation.
+ *
+ * So the badge shows Meta's answer, and when it differs from what was asked
+ * for it says so, rather than quietly replacing the salon's choice with
+ * another word and leaving them to wonder when it changed.
+ */
+export function CategoryBadge({
+  category,
+  requestedCategory,
+  channel,
+}: {
+  category: TemplateCategory;
+  requestedCategory?: TemplateCategory | null;
+  channel: string;
+}) {
+  const overruled = channel === 'WHATSAPP' && requestedCategory != null && requestedCategory !== category;
+
+  return (
+    <Badge tone={category === 'MARKETING' ? 'warning' : 'info'}>
+      {category.toLowerCase()}
+      {overruled ? ' · by Meta' : ''}
+    </Badge>
+  );
+}
+
+/** The sentence under the card, when Meta disagreed. Null when it did not. */
+export function categoryNote({
+  category,
+  requestedCategory,
+  channel,
+}: {
+  category: TemplateCategory;
+  requestedCategory?: TemplateCategory | null;
+  channel: string;
+}): string | null {
+  if (channel !== 'WHATSAPP' || requestedCategory == null || requestedCategory === category) return null;
+
+  const base =
+    `Submitted as ${requestedCategory.toLowerCase()}; Meta filed it as ${category.toLowerCase()}. ` +
+    'Meta judges the category by the wording, not by what was submitted.';
+
+  return category === 'MARKETING'
+    ? `${base} It now only goes to customers who opted in to marketing, and costs more per conversation.`
+    : base;
 }

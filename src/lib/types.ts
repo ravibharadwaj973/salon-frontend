@@ -719,11 +719,16 @@ export type TemplateButton =
   | { type: 'QUICK_REPLY'; text: string }
   | { type: 'PHONE_NUMBER'; text: string; phone: string };
 
+export type TemplateCategory = 'UTILITY' | 'MARKETING' | 'AUTHENTICATION' | 'SERVICE';
+
 export interface MessageTemplate {
   id: string;
   name: string;
   channel: 'WHATSAPP' | 'SMS' | 'EMAIL' | 'IN_APP';
-  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION' | 'SERVICE';
+  /** Meta's verdict once submitted, not necessarily what was asked for. */
+  category: TemplateCategory;
+  /** What was submitted. Null until the template has been sent to Meta. */
+  requestedCategory: TemplateCategory | null;
   language: string;
   providerTemplateName: string | null;
   /** Meta's id, present only once the template exists on a WABA. */

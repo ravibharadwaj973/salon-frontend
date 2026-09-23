@@ -6,7 +6,7 @@ import { TemplateEditor } from './template-editor';
 import { RestoreDefaults } from './restore-defaults';
 import { SyncFromMeta } from './sync-from-meta';
 import { SubmitToMeta } from './submit-to-meta';
-import { MetaStatusBadge, metaHelp } from './meta-status';
+import { MetaStatusBadge, metaHelp, CategoryBadge, categoryNote } from './meta-status';
 import type { MessageTemplate, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Message templates' };
@@ -135,9 +135,11 @@ function TemplateGroup({
                 <p className="truncate font-mono text-xs font-medium text-ink">{template.name}</p>
                 <div className="mt-1 flex items-center gap-1.5">
                   <Badge>{template.channel.toLowerCase()}</Badge>
-                  <Badge tone={template.category === 'MARKETING' ? 'warning' : 'info'}>
-                    {template.category.toLowerCase()}
-                  </Badge>
+                  <CategoryBadge
+                    category={template.category}
+                    requestedCategory={template.requestedCategory}
+                    channel={template.channel}
+                  />
                 </div>
               </div>
               <MetaStatusBadge status={template.approvalStatus} channel={template.channel} />
@@ -148,6 +150,15 @@ function TemplateGroup({
 
               {template.channel === 'WHATSAPP' && template.approvalStatus !== 'APPROVED' ? (
                 <p className="mt-3 text-2xs leading-relaxed text-ink-subtle">{metaHelp(template.approvalStatus)}</p>
+              ) : null}
+
+              {/* Meta moved this template to another category. Said here
+                  because the consequence — who it may now be sent to — is
+                  invisible otherwise. */}
+              {categoryNote(template) ? (
+                <p className="mt-2 rounded-md bg-amber-50 p-2 text-2xs leading-relaxed text-amber-900">
+                  {categoryNote(template)}
+                </p>
               ) : null}
 
               {/* Meta's own sentence. It names the thing to change; a summary
