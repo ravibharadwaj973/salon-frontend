@@ -26,12 +26,14 @@ export function SyncFromMeta() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<MetaSyncOutcome | null>(null);
+  const [imported, setImported] = useState(0);
 
   async function sync() {
     setBusy(true);
     try {
       const outcome = await apiPost<MetaSyncOutcome>('templates/sync-from-meta');
       setResult(outcome);
+      setImported(0);
       if (!outcome.ok) toast.error(outcome.error ?? 'Meta did not answer');
       else if (outcome.updated.length === 0) toast.success(`Checked ${outcome.checked} templates — nothing changed`);
       else toast.success(`${outcome.updated.length} template${outcome.updated.length === 1 ? '' : 's'} updated`);
@@ -82,6 +84,13 @@ export function SyncFromMeta() {
             </p>
           ) : null}
 
+          {result.onlyOnMeta.length === 0 && imported > 0 ? (
+            <p className="text-emerald-800">
+              {imported === 1 ? 'Imported 1 template' : `Imported ${imported} templates`} from Meta. Nothing else on
+              the account is missing here.
+            </p>
+          ) : null}
+
           {result.onlyOnMeta.length > 0 ? (
             <div className="space-y-1.5">
               <p className="font-semibold text-ink">On Meta but not here</p>
@@ -98,7 +107,22 @@ export function SyncFromMeta() {
                       {row.language} · {row.status.toLowerCase()} · {row.parameters} value
                       {row.parameters === 1 ? '' : 's'}
                     </span>
-                    <ImportFromMeta template={row} />
+                    <ImportFromMeta
+                      template={row}
+                      onImported={() => {
+                        setImported((n) => n + 1);
+                        setResult((current) =>
+                          current
+                            ? {
+                                ...current,
+                                onlyOnMeta: current.onlyOnMeta.filter(
+                                  (other) => !(other.name === row.name && other.language === row.language),
+                                ),
+                              }
+                            : current,
+                        );
+                      }}
+                    />
                   </li>
                 ))}
               </ul>

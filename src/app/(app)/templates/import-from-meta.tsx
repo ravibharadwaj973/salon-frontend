@@ -44,7 +44,21 @@ function Body({ text }: { text: string }) {
   );
 }
 
-export function ImportFromMeta({ template }: { template: MetaOnlyTemplate }) {
+export function ImportFromMeta({
+  template,
+  onImported,
+}: {
+  template: MetaOnlyTemplate;
+  /**
+   * Take this row off the list.
+   *
+   * router.refresh() re-renders the page, but the sync result lives in client
+   * state and nothing re-runs the sync — so without this the template stays
+   * listed as "on Meta but not here" after being imported, and the obvious
+   * thing to do about that is press Import again.
+   */
+  onImported?: () => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -59,8 +73,15 @@ export function ImportFromMeta({ template }: { template: MetaOnlyTemplate }) {
         name: template.name,
         language: template.language,
       });
-      if (result.ok) toast.success(result.message);
-      else toast.error(result.message);
+      if (result.ok) {
+        toast.success(result.message);
+        onImported?.();
+      } else {
+        toast.error(result.message);
+        // "already exists here" is not a failure to retry either: the row is
+        // present locally, so it does not belong on this list any more.
+        if (result.templateId) onImported?.();
+      }
       setOpen(false);
       router.refresh();
     } catch (error) {
