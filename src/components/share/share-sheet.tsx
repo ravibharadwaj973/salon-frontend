@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ExternalLink, Mail, MessageSquare, Send, Smartphone } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
-import { Field, Select, Textarea } from '@/components/ui/form';
+import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
 import type { Channel, MessageTemplate } from '@/lib/types';
@@ -38,6 +38,26 @@ const CHANNELS: { value: Channel; label: string; icon: typeof MessageSquare }[] 
   { value: 'EMAIL', label: 'Email', icon: Mail },
 ];
 
+/** {{customer_name}} → "Customer name", for a label somebody can read. */
+function humanise(name: string): string {
+  const words = name.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+const isDateVariable = (name: string) => /date|day|expiry|anniversary|birthday/.test(name);
+const isTimeVariable = (name: string) => /time/.test(name);
+
+/** A placeholder imported from Meta that nobody has matched to a field yet. */
+const isUnmapped = (name: string) => /^unmapped_\d+$/.test(name);
+
+function today(): string {
+  return new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function now(): string {
+  return new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 /**
  * Send something to one customer, from wherever they are on screen.
  *
@@ -68,6 +88,18 @@ export function ShareSheet({
   const [templateId, setTemplateId] = useState('');
   const [body, setBody] = useState('');
   const [edited, setEdited] = useState(false);
+  /**
+   * Values typed in for placeholders nothing could fill.
+   *
+   * Held in a ref as well as state because `load` is a useCallback that must
+   * not re-create on every keystroke — the preview is re-rendered by the
+   * SERVER, so the values have to travel with the request rather than being
+   * substituted here. Two renderers would drift, and the one the customer gets
+   * is the server's.
+   */
+  const [vars, setVars] = useState<Record<string, string>>({});
+  const varsRef = useRef(vars);
+  varsRef.current = vars;
   const [preview, setPreview] = useState<SharePreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -101,6 +133,7 @@ export function ShareSheet({
         appointmentId: target.appointmentId,
         templateId: templateId || undefined,
         body: edited ? body : undefined,
+        variables: varsRef.current,
       });
       setPreview(result);
       if (!edited) setBody(result.body);
@@ -117,6 +150,24 @@ export function ShareSheet({
     void load();
   }, [load]);
 
+  /**
+   * Re-render after they stop typing.
+   *
+   * A request per keystroke would be both wasteful and jumpy; waiting for a
+   * pause means the preview they read is the message that will be sent.
+   */
+  const varsKey = JSON.stringify(vars);
+  useEffect(() => {
+    if (!open || varsKey === '{}') return;
+    const timer = setTimeout(() => void load(), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [varsKey]);
+
+  // A different template has different blanks; keeping the old answers would
+  // quietly put last template's date into this one.
+  useEffect(() => setVars({}), [templateId]);
+
   // Reset when the sheet is reopened for someone else.
   useEffect(() => {
     if (!open) {
@@ -124,6 +175,7 @@ export function ShareSheet({
       setBody('');
       setEdited(false);
       setPreview(null);
+      setVars({});
     }
   }, [open]);
 
@@ -136,6 +188,7 @@ export function ShareSheet({
         leadId: target.leadId,
         templateId: templateId || undefined,
         body: templateId && !edited ? undefined : body,
+        variables: vars,
       });
       // Not "Sent". /messages/send queues the message; the worker hands it to
       // WhatsApp a moment later, and the provider can still refuse it. Saying
@@ -187,7 +240,17 @@ export function ShareSheet({
           <Button
             onClick={send}
             loading={sending}
-            disabled={blocked || noAddress || outOfQuota || !body.trim() || !preview?.delivery.live}
+            disabled={
+              blocked ||
+              noAddress ||
+              outOfQuota ||
+              !body.trim() ||
+              !preview?.delivery.live ||
+              // A blank is not a cosmetic problem on a template: Meta counts
+              // parameters and rejects the send outright. Two of these went out
+              // as failures before the gaps were visible at all.
+              Boolean(preview?.unresolved.length)
+            }
           >
             <Send className="h-4 w-4" />
             Send from the salon
@@ -259,10 +322,63 @@ export function ShareSheet({
         </Field>
 
         {preview?.unresolved.length ? (
-          <Warning tone="amber">
-            These details could not be filled in: {preview.unresolved.join(', ')}. The customer will see a blank where
-            each one should be — type over them before sending.
-          </Warning>
+          <div className="space-y-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3.5">
+            <div className="flex items-start gap-2 text-xs leading-relaxed text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                {templateId ? (
+                  <>
+                    WhatsApp rejects a template with an empty value —{' '}
+                    <span className="font-mono text-2xs">#131008 Required parameter is missing</span> — so these have
+                    to be filled in before this can send.
+                  </>
+                ) : (
+                  <>The customer would see a blank where each of these should be.</>
+                )}
+              </p>
+            </div>
+
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {preview.unresolved.map((name) => (
+                <Field
+                  key={name}
+                  label={isUnmapped(name) ? `Unmatched placeholder (${name})` : humanise(name)}
+                  hint={
+                    isUnmapped(name)
+                      ? 'Imported from Meta and never matched to a field — fix it on the template to stop being asked every time'
+                      : undefined
+                  }
+                >
+                  {({ id }) => (
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id={id}
+                        value={vars[name] ?? ''}
+                        onChange={(e) => setVars((v) => ({ ...v, [name]: e.target.value }))}
+                        placeholder={isDateVariable(name) ? today() : isTimeVariable(name) ? now() : ''}
+                      />
+                      {/* Offered, never applied on its own. Filling a
+                          cancellation notice with today's date when the
+                          appointment was next Tuesday tells the customer
+                          something false, and nothing on screen would say so. */}
+                      {isDateVariable(name) || isTimeVariable(name) ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setVars((v) => ({ ...v, [name]: isTimeVariable(name) ? now() : today() }))
+                          }
+                        >
+                          {isTimeVariable(name) ? 'Now' : 'Today'}
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
+                </Field>
+              ))}
+            </div>
+          </div>
         ) : null}
 
         {blocked ? (
