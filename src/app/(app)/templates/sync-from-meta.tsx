@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
-import { apiPost, errorMessage } from '@/lib/client';
+import { apiDelete, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/overlay';
 import { ImportFromMeta } from './import-from-meta';
@@ -27,6 +27,7 @@ export function SyncFromMeta() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<MetaSyncOutcome | null>(null);
   const [imported, setImported] = useState(0);
+  const [archived, setArchived] = useState<string[]>([]);
 
   async function sync() {
     setBusy(true);
@@ -86,6 +87,51 @@ export function SyncFromMeta() {
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {/* The mirror of "On Meta but not here". A template deleted in
+              WhatsApp Manager cannot send and cannot be recovered, but it is
+              still wired into journeys and campaigns, so it is offered for
+              archiving rather than deleted underneath the salon. */}
+          {result.removedOnMeta.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="font-semibold text-ink">Here but no longer on Meta</p>
+              <p>
+                Deleted from your WhatsApp account, so nothing can be sent from them again. Archiving hides a template
+                from this list; anything already sent from it keeps its history, and any journey still pointing at it
+                will say so.
+              </p>
+              <ul className="space-y-1.5">
+                {result.removedOnMeta.map((row) => (
+                  <li key={row.id} className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-2xs text-ink">{row.name}</span>
+                    <span className="text-ink-subtle">
+                      {row.language} · was {row.wasStatus.toLowerCase()}
+                    </span>
+                    {archived.includes(row.id) ? (
+                      <span className="text-emerald-800">archived</span>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        className="h-6 px-2 text-2xs"
+                        onClick={async () => {
+                          try {
+                            await apiDelete(`templates/${row.id}`);
+                            setArchived((prev) => [...prev, row.id]);
+                            toast.success(`${row.name} archived`);
+                            router.refresh();
+                          } catch (error) {
+                            toast.error(errorMessage(error));
+                          }
+                        }}
+                      >
+                        Archive
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           {result.notSubmitted.length > 0 ? (

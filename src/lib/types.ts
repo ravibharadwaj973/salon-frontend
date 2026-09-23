@@ -792,6 +792,8 @@ export interface MetaSyncOutcome {
   }[];
   onlyOnMeta: MetaOnlyTemplate[];
   notSubmitted: string[];
+  /** Meta held these once and no longer does. They cannot send. */
+  removedOnMeta: { id: string; name: string; language: string; wasStatus: string }[];
   source?: string;
   error?: string;
 }
