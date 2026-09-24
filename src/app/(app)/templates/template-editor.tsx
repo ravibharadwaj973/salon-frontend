@@ -307,8 +307,22 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
             </p>
           ) : null}
 
-          {isWhatsApp ? (
-            <ButtonEditor buttons={form.buttons} onChange={(next) => set('buttons', next)} />
+          {/* Email gets buttons too, and they are simpler there: no approval,
+              no split base-plus-suffix, and a variable holding the whole
+              address works. A "View invoice" button beats a bare URL in the
+              wording, which half the mail clients will not even make
+              clickable. */}
+          {isWhatsApp || isEmail ? (
+            <>
+              <ButtonEditor buttons={form.buttons} onChange={(next) => set('buttons', next)} />
+              {isEmail ? (
+                <p className="text-2xs text-ink-subtle">
+                  On email only link buttons are sent, drawn under the message with the full address printed beneath in
+                  case the button is stripped. Leave the URL blank and pick a variable that already holds a whole link,
+                  such as <span className="font-mono">invoice_link</span>, and that link becomes the button.
+                </p>
+              ) : null}
+            </>
           ) : null}
 
           {template && isWhatsApp ? (
