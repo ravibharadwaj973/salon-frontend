@@ -30,6 +30,8 @@ interface SharePreview {
   delivery: { live: boolean; source: string; reason: string | null; simulated?: boolean };
   quota: { meter: string | null; available: number | null };
   whatsappLink: string | null;
+  /** Links that resolved for this customer, invoice or appointment. */
+  quickLinks: { label: string; url: string }[];
 }
 
 const CHANNELS: { value: Channel; label: string; icon: typeof MessageSquare }[] = [
@@ -321,6 +323,32 @@ export function ShareSheet({
           )}
         </Field>
 
+        {/* The one thing that cannot be typed by hand.
+            An invoice address ends in a 24-character token nobody can read off
+            a screen, and "write it myself" is the first option in the picker
+            above -- so the links that resolved for THIS customer are one press
+            away. A link that did not resolve is not offered at all, rather
+            than offered and broken. */}
+        {preview?.quickLinks?.length ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-2xs text-ink-subtle">Add a link:</span>
+            {preview.quickLinks.map((link) => (
+              <button
+                key={link.url}
+                type="button"
+                title={link.url}
+                className="rounded-md border border-stone-200 px-2 py-1 text-2xs text-ink hover:border-stone-300 hover:bg-stone-50"
+                onClick={() => {
+                  setBody((current) => `${current.replace(/\s+$/, '')}\n\n${link.label}: ${link.url}`.trim());
+                  setEdited(true);
+                }}
+              >
+                + {link.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {preview?.unresolved.length ? (
           <div className="space-y-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3.5">
             <div className="flex items-start gap-2 text-xs leading-relaxed text-amber-900">
@@ -406,11 +434,12 @@ export function ShareSheet({
           <Warning tone="amber">{preview.delivery.reason}</Warning>
         ) : null}
 
-        {preview?.quota.available !== null && preview?.quota.available !== undefined && preview.quota.available > 0 ? (
-          <p className="text-2xs text-ink-subtle">
-            {preview.quota.available.toLocaleString('en-IN')} {channel.toLowerCase()} messages left this month.
-          </p>
-        ) : null}
+        {/* The remaining allowance used to be printed here on every send.
+            Nobody sending one message to one customer is deciding anything
+            with it, and a number that large reads as a target. When it matters
+            -- when it runs out -- the warning above says so. The full meter
+            lives on the billing screen, where somebody is actually looking at
+            usage. */}
       </div>
     </Modal>
   );
