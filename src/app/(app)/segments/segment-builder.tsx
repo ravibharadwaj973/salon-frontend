@@ -159,10 +159,19 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
       const created = await apiPost<{ id: string }>('segments', {
         name: name.trim(),
         description: description.trim() || undefined,
-        // Empty rules on a hand-picked list. The server knows not to read them
-        // — resolveMembers reads the members instead — which is the whole
-        // reason isDynamic has to travel with it.
-        rules: handPicked ? { all: [] } : rules,
+        /**
+         * An empty rule set, in the shape the server actually validates.
+         *
+         * `{ all: [] }` was a guess and the server said so — "conditions:
+         * Required" — which is the new validation message earning its keep:
+         * the old one said "Validation failed" and I would have been looking
+         * for the fault anywhere but here.
+         *
+         * The rules are never read on a hand-picked list, because isDynamic
+         * sends resolveMembers to the members table instead. They still have
+         * to parse, because the endpoint is shared with rule-based segments.
+         */
+        rules: handPicked ? { match: 'all' as const, conditions: [] } : rules,
         isDynamic: !handPicked,
       });
       toast.success(handPicked ? 'List created — now add the people' : 'Segment saved');
