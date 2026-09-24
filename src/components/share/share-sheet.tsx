@@ -188,6 +188,11 @@ export function ShareSheet({
         channel,
         customerId: target.customerId,
         leadId: target.leadId,
+        // What the message is about. The preview has always been given these
+        // and the send has always dropped them, so the salon read real numbers
+        // on screen and the customer received "Invoice:" with nothing after it.
+        invoiceId: target.invoiceId,
+        appointmentId: target.appointmentId,
         templateId: templateId || undefined,
         body: templateId && !edited ? undefined : body,
         variables: vars,
