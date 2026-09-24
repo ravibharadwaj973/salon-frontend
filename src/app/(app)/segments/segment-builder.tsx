@@ -133,6 +133,20 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
     };
   }, [settled, open]);
 
+  /**
+   * A RULE, OR A LIST THE OWNER BUILDS BY HAND.
+   *
+   * Rules answer "everyone who has not been in for 60 days". They cannot
+   * answer "these nine, because I know them" — the brides whose trials are
+   * next month, the regulars told about a new stylist first. That list lives
+   * in the owner's head and no field in the customer book describes it.
+   *
+   * A hand-picked list is created empty and filled on its own page, one
+   * search at a time, which is why the rule builder disappears here rather
+   * than being left on screen doing nothing.
+   */
+  const [handPicked, setHandPicked] = useState(false);
+
   async function save() {
     setError(null);
     if (!name.trim()) {
@@ -142,10 +156,21 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
 
     setBusy('save');
     try {
-      await apiPost('segments', { name: name.trim(), description: description.trim() || undefined, rules });
-      toast.success('Segment saved');
+      const created = await apiPost<{ id: string }>('segments', {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        // Empty rules on a hand-picked list. The server knows not to read them
+        // — resolveMembers reads the members instead — which is the whole
+        // reason isDynamic has to travel with it.
+        rules: handPicked ? { all: [] } : rules,
+        isDynamic: !handPicked,
+      });
+      toast.success(handPicked ? 'List created — now add the people' : 'Segment saved');
       setOpen(false);
-      router.refresh();
+      // Straight to the list, because an empty hand-picked segment is not
+      // finished — the next thing to do is add somebody.
+      if (handPicked && created?.id) router.push(`/segments/${created.id}`);
+      else router.refresh();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -163,13 +188,19 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Build a segment"
-        description="Rules run against live data, so the audience is right on the day you send."
+        title={handPicked ? 'A list you choose yourself' : 'Build a segment'}
+        description={
+          handPicked
+            ? 'Nobody joins or leaves on their own. You decide who is in it.'
+            : 'Rules run against live data, so the audience is right on the day you send.'
+        }
         size="lg"
         footer={
           <>
             <span className="mr-auto flex items-center gap-1.5 text-xs text-ink-muted">
-              {busy === 'preview' ? (
+              {handPicked ? (
+                <span className="text-ink-subtle">Created empty — you add the people next</span>
+              ) : busy === 'preview' ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   counting…
@@ -183,8 +214,8 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={busy === 'save'}>
               Cancel
             </Button>
-            <Button onClick={save} loading={busy === 'save'} disabled={preview?.count === 0}>
-              Save segment
+            <Button onClick={save} loading={busy === 'save'} disabled={!handPicked && preview?.count === 0}>
+              {handPicked ? 'Create list' : 'Save segment'}
             </Button>
           </>
         }
@@ -205,7 +236,47 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
             </Field>
           </div>
 
-          {catalogue?.presets?.length ? (
+          {/* Which kind of list this is. First, because it decides whether
+              anything below it is relevant. */}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              {
+                picked: false,
+                title: 'Match a rule',
+                blurb: 'Everyone who fits, recounted on the day you send. Lapsed 45 days, spent over ₹5,000, Gold tier.',
+              },
+              {
+                picked: true,
+                title: 'Choose people myself',
+                blurb: 'A list you build by hand and nobody joins on their own. For the nine people you already have in mind.',
+              },
+            ].map((option) => (
+              <button
+                key={option.title}
+                type="button"
+                onClick={() => setHandPicked(option.picked)}
+                className={
+                  'rounded-lg border p-3 text-left transition ' +
+                  (handPicked === option.picked
+                    ? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500'
+                    : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50')
+                }
+              >
+                <span className="block text-xs font-semibold text-ink">{option.title}</span>
+                <span className="mt-1 block text-2xs leading-relaxed text-ink-subtle">{option.blurb}</span>
+              </button>
+            ))}
+          </div>
+
+          {handPicked ? (
+            <p className="rounded-lg bg-stone-50 p-3 text-2xs leading-relaxed text-ink-muted">
+              The list is created empty. The next screen has a search box — find each person by name, phone or
+              customer code and add them. Consent still applies when you send: choosing somebody by hand is not the
+              same as their agreeing to hear from you.
+            </p>
+          ) : null}
+
+          {!handPicked && catalogue?.presets?.length ? (
             <div>
               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink">
                 <Sparkles className="h-3.5 w-3.5 text-brand-500" />
@@ -241,7 +312,9 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
             </div>
           ) : null}
 
-          <div>
+          {/* The rule builder disappears on a hand-picked list rather than
+              being left on screen doing nothing. */}
+          <div className={handPicked ? 'hidden' : undefined}>
             <div className="mb-2 flex items-center gap-2">
               <span className="text-xs font-semibold text-ink">Customers matching</span>
               <Select value={match} onChange={(e) => setMatch(e.target.value as 'all' | 'any')} className="h-7 w-24 text-xs">
@@ -341,7 +414,7 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
             </button>
           </div>
 
-          {preview ? (
+          {preview && !handPicked ? (
             <div className="rounded-lg border border-brand-200 bg-brand-50/60 p-4">
               <p className="text-sm font-medium text-brand-900">
                 {preview.approximate ? 'More than ' : ''}

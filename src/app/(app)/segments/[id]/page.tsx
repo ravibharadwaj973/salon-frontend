@@ -7,6 +7,7 @@ import { Badge, Card, CardHeader, EmptyState, PageHeader, StatusBadge } from '@/
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { count, date, fromNow, money, phone as formatPhone } from '@/lib/format';
 import type { Money, Segment } from '@/lib/types';
+import { PickMembers, RemoveMember } from './pick-members';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,6 +118,15 @@ export default async function SegmentMembersPage({
 
   const { data: rows, meta } = members;
 
+  /**
+   * A rule and a hand-picked list are different things on this screen.
+   *
+   * On a rule, the list is a RESULT: nobody can add to it, because the next
+   * run would undo them. On a hand-picked list, the list IS the segment, so
+   * this is where it is built.
+   */
+  const handPicked = segment ? !segment.isDynamic : false;
+
   return (
     <>
       <Link
@@ -178,17 +188,27 @@ export default async function SegmentMembersPage({
         </div>
       ) : null}
 
+      {handPicked ? <PickMembers segmentId={id} memberIds={rows.map((member) => member.id)} /> : null}
+
       <Card>
         <CardHeader
           title={`${count(meta?.total ?? rows.length)} ${rows.length === 1 ? 'person' : 'people'}`}
-          subtitle="Biggest spenders first. A segment is a live rule, so this list changes as customers do."
+          subtitle={
+            handPicked
+              ? 'Chosen by hand. Nobody joins or leaves this list on their own.'
+              : 'Biggest spenders first. A segment is a live rule, so this list changes as customers do.'
+          }
         />
 
         {rows.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="Nobody matches these rules"
-            description="Try loosening a number — or switch the segment to matching any rule instead of all of them."
+            title={handPicked ? 'Nobody in this list yet' : 'Nobody matches these rules'}
+            description={
+              handPicked
+                ? 'Search above and add the people you want. Nothing is added on its own — that is the point of a list like this.'
+                : 'Try loosening a number — or switch the segment to matching any rule instead of all of them.'
+            }
           />
         ) : (
           <>
@@ -201,6 +221,7 @@ export default async function SegmentMembersPage({
                   <TH align="right">Visits</TH>
                   <TH align="right">Spent</TH>
                   <TH>Last in</TH>
+                  {handPicked ? <TH align="right">Remove</TH> : null}
                 </TR>
               </THead>
               <TBody>
@@ -250,6 +271,15 @@ export default async function SegmentMembersPage({
                         <Badge tone="neutral">never</Badge>
                       )}
                     </TD>
+                    {handPicked ? (
+                      <TD align="right">
+                        <RemoveMember
+                          segmentId={id}
+                          customerId={member.id}
+                          name={`${member.firstName} ${member.lastName ?? ''}`.trim()}
+                        />
+                      </TD>
+                    ) : null}
                   </TR>
                 ))}
               </TBody>
