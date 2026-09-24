@@ -8,6 +8,7 @@ import { CampaignComposer } from './campaign-composer';
 import { PlanGate, PlanGateList } from '@/components/plan-gate';
 import { count, date, dayjs, money, percent } from '@/lib/format';
 import type { Campaign, MessageTemplate, Money, Segment, SessionUser } from '@/lib/types';
+import { SendAgain } from './send-again';
 
 export const metadata: Metadata = { title: 'Campaigns' };
 export const dynamic = 'force-dynamic';
@@ -120,6 +121,7 @@ export default async function CampaignsPage({
                 <TH align="right">Bookings</TH>
                 <TH align="right">Revenue</TH>
                 <TH align="right">ROI</TH>
+                <TH />
               </TR>
             </THead>
             <TBody>
@@ -155,6 +157,13 @@ export default async function CampaignsPage({
                     </TD>
                     <TD align="right" className="text-ink-muted">
                       {roiRow?.roiPct !== null && roiRow?.roiPct !== undefined ? percent(roiRow.roiPct, 0) : '—'}
+                    </TD>
+                    {/* Only on one that is finished. A campaign still going
+                        does not need a second copy of itself. */}
+                    <TD align="right">
+                      {campaign.status === 'COMPLETED' ? (
+                        <SendAgain campaignId={campaign.id} name={campaign.name} />
+                      ) : null}
                     </TD>
                   </TR>
                 );
