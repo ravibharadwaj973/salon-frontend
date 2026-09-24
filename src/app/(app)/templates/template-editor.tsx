@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, Pencil, Plus } from 'lucide-react';
+import { Eye, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { apiPatch, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
@@ -78,6 +78,39 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
     }
   }
 
+  /**
+   * Take the shipped wording back, on this template only.
+   *
+   * Confirmed first because it discards whatever is in the box. Meta's side --
+   * the approval status, the provider id, the variable order recorded at
+   * submission -- is left alone by the server: rewriting an approved
+   * template's body here would not change Meta's copy, only make ours disagree
+   * with it.
+   */
+  async function resetToDefault() {
+    if (!template) return;
+    if (
+      !window.confirm(
+        `Put "${template.name}" back to the wording it ships with? Anything written here is replaced. Its approval ` +
+          'status with WhatsApp is not affected.',
+      )
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await apiPost(`templates/${template.id}/reset`, {});
+      toast.success('Wording reset to the default');
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submit() {
     setError(null);
     if (!form.name.trim() || !form.bodyText.trim()) {
@@ -141,6 +174,17 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
               <Button variant="ghost" onClick={runPreview}>
                 <Eye className="h-4 w-4" />
                 Preview
+              </Button>
+            ) : null}
+            {/* An improved default cannot reach a salon that already has the
+                old wording, because Restore defaults only ADDS what is absent
+                — which is right, and which is also how an invoice email kept
+                going out with no link in it long after the default carried
+                one. This is the deliberate, one-template way back. */}
+            {template ? (
+              <Button variant="ghost" onClick={resetToDefault} disabled={saving}>
+                <RotateCcw className="h-4 w-4" />
+                Reset wording
               </Button>
             ) : null}
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
