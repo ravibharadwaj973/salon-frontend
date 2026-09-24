@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Receipt, Search } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Card, EmptyState, PageHeader, StatTile, StatusBadge } from '@/components/ui/display';
 import { ButtonLink } from '@/components/ui/button';
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { date, fullName, money, time } from '@/lib/format';
 import type { Invoice, Money } from '@/lib/types';
+import { InvoiceFilters } from './invoice-filters';
 
 export const metadata: Metadata = { title: 'Invoices' };
 export const dynamic = 'force-dynamic';
@@ -85,35 +86,13 @@ export default async function InvoicesPage({
       ) : null}
 
       <Card>
-        <form className="flex flex-wrap items-center gap-2 border-b border-stone-200 p-3" action="/invoices">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle" />
-            <input
-              type="search"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Invoice number, customer or phone…"
-              className="h-9 w-full rounded-lg border border-stone-300 bg-white pl-8 pr-3 text-sm shadow-sm"
-            />
-          </div>
-          <select name="status" defaultValue={params.status ?? ''} className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-sm shadow-sm">
-            <option value="">All statuses</option>
-            {['ISSUED', 'PARTIALLY_PAID', 'PAID', 'REFUNDED', 'VOID'].map((status) => (
-              <option key={status} value={status}>
-                {status.replace(/_/g, ' ').toLowerCase()}
-              </option>
-            ))}
-          </select>
-          <input type="date" name="from" defaultValue={params.from ?? ''} className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-sm shadow-sm" />
-          <input type="date" name="to" defaultValue={params.to ?? ''} className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-sm shadow-sm" />
-          <label className="flex h-9 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 text-sm shadow-sm">
-            <input type="checkbox" name="unpaidOnly" value="true" defaultChecked={params.unpaidOnly === 'true'} className="h-3.5 w-3.5 rounded border-stone-300 text-brand-600" />
-            Unpaid only
-          </label>
-          <button type="submit" className="h-9 rounded-lg bg-brand-600 px-3.5 text-sm font-medium text-white hover:bg-brand-700">
-            Apply
-          </button>
-        </form>
+        <InvoiceFilters
+          q={params.q ?? ''}
+          status={params.status ?? ''}
+          from={params.from ?? ''}
+          to={params.to ?? ''}
+          unpaidOnly={params.unpaidOnly === 'true'}
+        />
 
         {invoices.length === 0 ? (
           <EmptyState
