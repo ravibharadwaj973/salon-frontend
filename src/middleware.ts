@@ -3,11 +3,43 @@ import { NextResponse, type NextRequest } from 'next/server';
 const ACCESS_COOKIE = 'sos_at';
 const REFRESH_COOKIE = 'sos_rt';
 
-/** Routes reachable without a session. */
-const PUBLIC_PREFIXES = ['/login', '/book', '/feedback', '/api/auth', '/_next', '/favicon', '/icon', '/manifest'];
+/**
+ * WHAT A CUSTOMER CAN OPEN WITHOUT AN ACCOUNT, AND NOTHING MORE.
+ *
+ * This was one list matched with a loose startsWith, and loose is the wrong
+ * shape for a permission check: a prefix that is public makes every path
+ * beginning with those characters public too, whether or not it is the same
+ * page.
+ *
+ * Two consequences. `/invoice` was simply absent, so the link in an invoice
+ * email redirected the customer to /login?next=%2Finvoice%2F... and asked them
+ * to sign in to a salon system they will never have an account for. And
+ * `/feedback` was present for the customer's form at /feedback/<appointment>,
+ * which also waved through `/feedback` itself — the staff page listing every
+ * customer's feedback. Only the API refusing a request with no cookie stood
+ * behind it.
+ *
+ * Adding `/invoice` to the old list would have done the same to `/invoices`,
+ * the staff invoice list, which begins with exactly those characters.
+ *
+ * So: sections are public in their CHILDREN only, which is where the token is
+ * and where the customer goes. The section's own page is not, which is where
+ * the staff screen lives.
+ */
+const PUBLIC_SECTIONS = ['/book', '/feedback', '/invoice', '/api/auth'];
+
+/** Public as themselves, with no child path. */
+const PUBLIC_EXACT = ['/login'];
+
+/** Build output and icons, matched loosely because they carry file extensions. */
+const ASSET_PREFIXES = ['/_next', '/favicon', '/icon', '/apple-icon', '/manifest'];
 
 function isPublic(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(prefix));
+  if (PUBLIC_EXACT.includes(pathname)) return true;
+  // The trailing slash is the whole guard: /invoice/<token> is a customer's
+  // bill, /invoices is the salon's ledger.
+  if (PUBLIC_SECTIONS.some((section) => pathname.startsWith(`${section}/`))) return true;
+  return ASSET_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
 /**
