@@ -32,6 +32,7 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
     category: template?.category ?? 'UTILITY',
     language: template?.language ?? 'en',
     providerTemplateName: template?.providerTemplateName ?? '',
+    headerText: template?.headerText ?? '',
     bodyText: template?.bodyText ?? '',
     buttons: (template?.buttons ?? []) as TemplateButton[],
     approvalStatus: template?.approvalStatus ?? 'DRAFT',
@@ -39,6 +40,34 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  /**
+   * ONE FORM, THREE CHANNELS THAT DO NOT WORK THE SAME WAY.
+   *
+   * This editor was built for WhatsApp and then pointed at the other two, so an
+   * email template asked for a Provider template name "from WhatsApp Manager",
+   * a language code that "must match WhatsApp Manager exactly" and an approval
+   * status no email ever has — three fields to ignore and one, the subject
+   * line, that could not be edited at all. An SMS asked for buttons.
+   *
+   * So each channel now shows what it has:
+   *
+   *   WhatsApp — Meta's name, Meta's language, Meta's verdict, buttons
+   *   Email    — a subject line, and nothing to wait for
+   *   SMS      — a length, because 160 characters is one message and 161 is two
+   */
+  const isWhatsApp = form.channel === 'WHATSAPP';
+  const isEmail = form.channel === 'EMAIL';
+  const isSms = form.channel === 'SMS';
+
+  // What the recipient's phone will actually bill for. GSM-7 fits 160 in one
+  // segment and 153 per segment after that; one non-GSM character (a curly
+  // quote pasted from Word, an emoji, Devanagari) switches the whole message to
+  // UCS-2 at 70. Worth saying before it is sent to two thousand people.
+  const smsLength = form.bodyText.length;
+  const unicodeSms = /[^\x00-\x7F]/.test(form.bodyText);
+  const perSegment = unicodeSms ? 70 : 160;
+  const smsSegments = smsLength === 0 ? 0 : Math.ceil(smsLength / (smsLength > perSegment ? (unicodeSms ? 67 : 153) : perSegment));
 
   async function runPreview() {
     if (!template) return;
@@ -64,6 +93,7 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
         category: form.category,
         language: form.language,
         providerTemplateName: form.providerTemplateName.trim() || undefined,
+        headerText: form.headerText.trim() || undefined,
         bodyText: form.bodyText,
         buttons: form.buttons,
         ...(template ? { approvalStatus: form.approvalStatus } : {}),
@@ -152,63 +182,136 @@ export function TemplateEditor({ template, compact }: { template?: MessageTempla
               )}
             </Field>
 
-            <Field label="Provider template name" hint="From WhatsApp Manager">
-              {({ id }) => (
-                <Input id={id} value={form.providerTemplateName} onChange={(e) => set('providerTemplateName', e.target.value)} className="font-mono" />
-              )}
-            </Field>
+            {isWhatsApp ? (
+              <Field label="Provider template name" hint="From WhatsApp Manager">
+                {({ id }) => (
+                  <Input id={id} value={form.providerTemplateName} onChange={(e) => set('providerTemplateName', e.target.value)} className="font-mono" />
+                )}
+              </Field>
+            ) : null}
 
-            {/*
-              WhatsApp treats a template's language as part of its identity: to
-              Meta, "hello_world" in en and "hello_world" in en_US are two
-              different templates. Sending the wrong one fails with
-              "(#132001) Template name does not exist in the translation" —
-              which reads like the name is wrong when the name is fine.
+            {isWhatsApp ? (
+              <>
+              {/*
+                WhatsApp treats a template's language as part of its identity: to
+                Meta, "hello_world" in en and "hello_world" in en_US are two
+                different templates. Sending the wrong one fails with
+                "(#132001) Template name does not exist in the translation" —
+                which reads like the name is wrong when the name is fine.
 
-              This has to match the language column in WhatsApp Manager exactly.
-              Meta's own sample templates are en_US, and a template written in
-              Hindi is hi, not hi_IN.
-            */}
-            <Field label="Template language" hint="Must match WhatsApp Manager exactly">
+                This has to match the language column in WhatsApp Manager exactly.
+                Meta's own sample templates are en_US, and a template written in
+                Hindi is hi, not hi_IN.
+              */}
+              <Field label="Template language" hint="Must match WhatsApp Manager exactly">
+                {({ id }) => (
+                  <Input
+                    id={id}
+                    value={form.language}
+                    onChange={(e) => set('language', e.target.value.trim())}
+                    placeholder="en_US"
+                    list="wa-language-codes"
+                    className="font-mono"
+                  />
+                )}
+              </Field>
+
+              <datalist id="wa-language-codes">
+                <option value="en_US">English (US) — Meta's sample templates</option>
+                <option value="en">English</option>
+                <option value="en_GB">English (UK)</option>
+                <option value="hi">Hindi</option>
+                <option value="mr">Marathi</option>
+                <option value="ta">Tamil</option>
+                <option value="te">Telugu</option>
+                <option value="bn">Bengali</option>
+                <option value="gu">Gujarati</option>
+                <option value="kn">Kannada</option>
+                <option value="ml">Malayalam</option>
+                <option value="pa">Punjabi</option>
+              </datalist>
+              </>
+            ) : null}
+          </div>
+
+          {/* Email's subject and WhatsApp's header are the same column and not
+              the same thing, so they are not the same field. A subject is the
+              whole reason an email gets opened; a WhatsApp header is an
+              optional bold line Meta caps at 60 characters. */}
+          {isEmail ? (
+            <Field
+              label="Subject line"
+              required
+              hint="What the customer sees in their inbox. Variables work here too."
+            >
               {({ id }) => (
                 <Input
                   id={id}
-                  value={form.language}
-                  onChange={(e) => set('language', e.target.value.trim())}
-                  placeholder="en_US"
-                  list="wa-language-codes"
-                  className="font-mono"
+                  value={form.headerText}
+                  onChange={(e) => set('headerText', e.target.value)}
+                  placeholder="Your appointment at {{salon_name}} is confirmed"
                 />
               )}
             </Field>
+          ) : null}
 
-            <datalist id="wa-language-codes">
-              <option value="en_US">English (US) — Meta's sample templates</option>
-              <option value="en">English</option>
-              <option value="en_GB">English (UK)</option>
-              <option value="hi">Hindi</option>
-              <option value="mr">Marathi</option>
-              <option value="ta">Tamil</option>
-              <option value="te">Telugu</option>
-              <option value="bn">Bengali</option>
-              <option value="gu">Gujarati</option>
-              <option value="kn">Kannada</option>
-              <option value="ml">Malayalam</option>
-              <option value="pa">Punjabi</option>
-            </datalist>
-          </div>
+          {isWhatsApp ? (
+            <Field label="Header" hint="Optional bold line above the message. 60 characters, one variable at most.">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  value={form.headerText}
+                  onChange={(e) => set('headerText', e.target.value)}
+                  maxLength={60}
+                />
+              )}
+            </Field>
+          ) : null}
 
-          <Field label="Message" required hint="Use {{variable}} placeholders">
+          <Field
+            label={isEmail ? 'Email body' : 'Message'}
+            required
+            hint="Use {{variable}} placeholders"
+          >
             {({ id }) => (
-              <Textarea id={id} value={form.bodyText} onChange={(e) => set('bodyText', e.target.value)} rows={5} className="leading-relaxed" />
+              <Textarea
+                id={id}
+                value={form.bodyText}
+                onChange={(e) => set('bodyText', e.target.value)}
+                rows={isEmail ? 10 : 5}
+                className="leading-relaxed"
+              />
             )}
           </Field>
 
-          {form.channel === 'WHATSAPP' ? (
+          {/* Said before sending rather than discovered on the bill. */}
+          {isSms ? (
+            <p className={`text-2xs ${smsSegments > 1 ? 'text-amber-800' : 'text-ink-subtle'}`}>
+              {smsLength} characters ·{' '}
+              <strong className="font-semibold">
+                {smsSegments} message{smsSegments === 1 ? '' : 's'}
+              </strong>{' '}
+              per recipient
+              {unicodeSms
+                ? ' — this message contains a non-Latin character, so the whole thing sends as Unicode at 70 characters per message instead of 160. A curly quote pasted from Word is enough to do it.'
+                : smsSegments > 1
+                  ? ' — over 160 characters, so every send costs twice. The variables count once they are filled in.'
+                  : '. Remember the variables grow when they are filled in.'}
+            </p>
+          ) : null}
+
+          {isSms ? (
+            <p className="text-2xs text-ink-subtle">
+              In India this wording has to be registered with DLT before it will deliver, and it has to match exactly —
+              a changed word means a re-registration.
+            </p>
+          ) : null}
+
+          {isWhatsApp ? (
             <ButtonEditor buttons={form.buttons} onChange={(next) => set('buttons', next)} />
           ) : null}
 
-          {template ? (
+          {template && isWhatsApp ? (
             <Field label="Provider approval status" hint="Set this once WhatsApp approves it">
               {({ id }) => (
                 <Select id={id} value={form.approvalStatus} onChange={(e) => set('approvalStatus', e.target.value as MessageTemplate['approvalStatus'])}>

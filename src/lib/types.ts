@@ -737,6 +737,8 @@ export interface MessageTemplate {
   rejectedReason: string | null;
   submittedAt: string | null;
   syncedAt: string | null;
+  /** The email subject line, or WhatsApp's optional bold header. */
+  headerText: string | null;
   bodyText: string;
   variables: string[];
   buttons: TemplateButton[];
