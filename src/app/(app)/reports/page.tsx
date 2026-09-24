@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { BarChart3, Lightbulb } from 'lucide-react';
+import Link from 'next/link';
+import { BarChart3, Lightbulb, MessageSquare } from 'lucide-react';
 import { apiFetchSafe } from '@/lib/api';
 import { Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
@@ -61,7 +62,19 @@ export default async function ReportsPage({
 
   return (
     <>
-      <PageHeader title="Reports" description={`${date(from)} – ${date(to)}`} />
+      <PageHeader
+        title="Reports"
+        description={`${date(from)} – ${date(to)}`}
+        action={
+          <Link
+            href={`/reports/messages?from=${from}&to=${to}`}
+            className="flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Message performance
+          </Link>
+        }
+      />
 
       {/* Period picker: a plain form, so any report view is a shareable URL. */}
       <form className="mb-5 flex flex-wrap items-center gap-2" action="/reports">

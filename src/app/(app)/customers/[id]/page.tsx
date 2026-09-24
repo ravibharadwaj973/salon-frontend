@@ -24,6 +24,7 @@ import { ButtonLink } from '@/components/ui/button';
 import { CustomerNotes } from './customer-notes';
 import { EditCustomerButton } from './edit-customer-button';
 import { ConsentEditor } from './consent-editor';
+import { MessagingCard, type CustomerMessaging } from './messaging-card';
 import { date, dateTime, fromNow, fullName, money, phone as formatPhone, time } from '@/lib/format';
 import type {
   Appointment,
@@ -105,6 +106,10 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       : Promise.resolve(null),
     shows('photos') ? apiFetchSafe<CustomerPhoto[]>(`/customers/${id}/photos`) : Promise.resolve(null),
   ]);
+
+  const messaging = shows('messaging')
+    ? await apiFetchSafe<CustomerMessaging>(`/analytics/messaging/customer/${id}`)
+    : null;
 
   const canManage = user?.permissions.includes('customer.manage') ?? false;
   const canSetTier = user?.role === 'OWNER' || user?.role === 'ADMIN';
@@ -568,7 +573,10 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             </Card>
           ) : null}
 
-          {customer.sections && customer.sections.length < 11 && user?.role !== 'OWNER' ? (
+          {/* Messages & engagement */}
+          {shows('messaging') && messaging ? <MessagingCard data={messaging} /> : null}
+
+          {customer.sections && customer.sections.length < 12 && user?.role !== 'OWNER' ? (
             <p className="flex items-start gap-1.5 px-1 text-2xs leading-relaxed text-ink-subtle">
               <Sparkles className="mt-px h-3 w-3 shrink-0" />
               Some sections are hidden for your role. The owner chooses what each role sees in Settings → Customer profile.

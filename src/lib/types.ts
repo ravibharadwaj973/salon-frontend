@@ -137,7 +137,8 @@ export type ProfileSectionKey =
   | 'notes'
   | 'photos'
   | 'feedback'
-  | 'contact';
+  | 'contact'
+  | 'messaging';
 
 /** GET /layouts/:page — the sections of a page, and who sees them. */
 export interface PageLayout {
