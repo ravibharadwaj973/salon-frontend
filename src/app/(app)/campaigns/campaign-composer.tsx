@@ -12,7 +12,10 @@ import { count, money } from '@/lib/format';
 import type { Campaign, MessageTemplate, Segment } from '@/lib/types';
 
 export type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
-export type Reach = Record<ChannelKey, { reachable: number; noAddress: number; noConsent: number }>;
+export type Reach = Record<
+  ChannelKey,
+  { reachable: number; noAddress: number; noConsent: number; undeliverable: number }
+>;
 
 export const CHANNEL_WORD: Record<string, string> = { WHATSAPP: 'WhatsApp', SMS: 'SMS', EMAIL: 'email' };
 
@@ -394,12 +397,20 @@ export function ConfirmStep({
           {/* The gap between the segment and the send, itemised. Somebody who
               expected 2,400 and is getting 900 should find out here, with the
               reason, not afterwards from the message log. */}
-          {row.noAddress > 0 || row.noConsent > 0 ? (
+          {row.noAddress > 0 || row.noConsent > 0 || (row.undeliverable ?? 0) > 0 ? (
             <ul className="mt-2 space-y-1 text-xs text-brand-800">
               {row.noAddress > 0 ? (
                 <li>
                   {count(row.noAddress)} of the {count(segmentSize)} have no{' '}
                   {channel === 'EMAIL' ? 'email address' : 'phone number'} on file and will be skipped.
+                </li>
+              ) : null}
+              {(row.undeliverable ?? 0) > 0 ? (
+                <li>
+                  {count(row.undeliverable)} {row.undeliverable === 1 ? 'has' : 'have'}{' '}
+                  {channel === 'EMAIL' ? 'an email address' : 'a number'} that came back undeliverable, so they will
+                  be skipped — you will not be charged for them. Fixing the{' '}
+                  {channel === 'EMAIL' ? 'address' : 'number'} on their profile puts them back in.
                 </li>
               ) : null}
               {row.noConsent > 0 ? (
@@ -428,7 +439,12 @@ export function ConfirmStep({
       {row?.reachable === 0 ? (
         <p className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
           Nobody in this segment can be reached on {word}, so there is nothing to send. Try another channel, or
-          collect {channel === 'EMAIL' ? 'email addresses' : 'consent'} first.
+          {(row?.undeliverable ?? 0) > 0
+            ? ' correct the addresses that came back undeliverable'
+            : channel === 'EMAIL'
+              ? ' collect email addresses'
+              : ' collect consent'}{' '}
+          first.
         </p>
       ) : null}
     </div>

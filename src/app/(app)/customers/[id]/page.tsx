@@ -529,13 +529,41 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 }
               />
               <CardBody className="space-y-2">
-                <ConsentRow channel="WhatsApp" status={customer.whatsappConsent} icon={MessageCircle} />
-                <ConsentRow channel="SMS" status={customer.smsConsent} icon={Phone} />
-                <ConsentRow channel="Email" status={customer.emailConsent} icon={Mail} />
+                <ConsentRow
+                  channel="WhatsApp"
+                  status={customer.whatsappConsent}
+                  icon={MessageCircle}
+                  reach={customer.whatsappStatus}
+                  lastError={customer.whatsappLastError}
+                />
+                <ConsentRow
+                  channel="SMS"
+                  status={customer.smsConsent}
+                  icon={Phone}
+                  reach={customer.smsStatus}
+                  lastError={customer.smsLastError}
+                />
+                <ConsentRow
+                  channel="Email"
+                  status={customer.emailConsent}
+                  icon={Mail}
+                  reach={customer.emailStatus}
+                  lastError={customer.emailLastError}
+                />
                 <p className="pt-1 text-2xs leading-relaxed text-ink-subtle">
                   Marketing messages only go to customers who opted in. Reminders and invoices go to everyone who has not
                   opted out.
                 </p>
+                {[customer.whatsappStatus, customer.smsStatus, customer.emailStatus].includes('UNDELIVERABLE') ? (
+                  /* The salon is charged for a send whether or not it arrives, so
+                     a dead address is skipped until somebody corrects it. Saying
+                     so here, next to the number itself, is the only place the fix
+                     is one click away. */
+                  <p className="text-2xs leading-relaxed text-amber-700">
+                    A channel marked undeliverable is skipped on future sends, so you are not charged for it again.
+                    Correct the number or address above and it starts sending again.
+                  </p>
+                ) : null}
               </CardBody>
             </Card>
           ) : null}
@@ -584,25 +612,46 @@ function Detail({ label, value, mono, href }: { label: string; value: string; mo
   );
 }
 
+/**
+ * Two different questions on one line: may we message them, and can we.
+ *
+ * They are kept visually apart because the answers have nothing to do with
+ * each other and the fixes are opposite — consent is the customer's to give,
+ * a dead number is a typo on this page. Collapsing them into one badge is how
+ * a salon ends up asking a customer to re-opt-in to a number that never
+ * existed.
+ */
 function ConsentRow({
   channel,
   status,
   icon: Icon,
+  reach,
+  lastError,
 }: {
   channel: string;
   status: string;
   icon: React.ComponentType<{ className?: string }>;
+  reach?: string | null;
+  lastError?: string | null;
 }) {
   const tone = status === 'OPTED_IN' ? 'success' : status === 'OPTED_OUT' ? 'danger' : 'neutral';
   const label = status === 'OPTED_IN' ? 'Opted in' : status === 'OPTED_OUT' ? 'Opted out' : 'Not asked';
+  const dead = reach === 'UNDELIVERABLE';
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-start justify-between gap-2">
       <span className="flex items-center gap-2 text-xs text-ink">
         <Icon className="h-3.5 w-3.5 text-ink-subtle" />
         {channel}
       </span>
-      <Badge tone={tone}>{label}</Badge>
+      <span className="flex flex-wrap items-center justify-end gap-1">
+        {dead ? (
+          <Badge tone="warning" title={lastError ?? undefined}>
+            Undeliverable
+          </Badge>
+        ) : null}
+        <Badge tone={tone}>{label}</Badge>
+      </span>
     </div>
   );
 }

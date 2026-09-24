@@ -26,7 +26,10 @@ export const dynamic = 'force-dynamic';
  */
 
 type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
-type Reach = Record<ChannelKey, { reachable: number; noAddress: number; noConsent: number }>;
+type Reach = Record<
+  ChannelKey,
+  { reachable: number; noAddress: number; noConsent: number; undeliverable: number }
+>;
 
 interface Member {
   id: string;
@@ -42,6 +45,9 @@ interface Member {
   whatsappConsent: string;
   smsConsent: string;
   emailConsent: string;
+  whatsappStatus?: string;
+  smsStatus?: string;
+  emailStatus?: string;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -53,13 +59,28 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 }
 
-/** Marketing needs a positive opt-in; this mirrors the server's own test. */
-function reachableOn(member: Member, channel: ChannelKey): boolean {
+/**
+ * Why this person will or will not be sent to, in the server's own order:
+ * no address, then a dead address, then consent. The order is what decides
+ * which single reason the row shows, and it runs cheapest-fix-first.
+ */
+function reachReason(member: Member, channel: ChannelKey): string | null {
   const address = channel === 'EMAIL' ? member.email?.trim() : member.phone?.trim();
-  if (!address) return false;
+  if (!address) return 'no address on file';
+
+  const status =
+    channel === 'EMAIL' ? member.emailStatus : channel === 'SMS' ? member.smsStatus : member.whatsappStatus;
+  if (status === 'UNDELIVERABLE') {
+    return channel === 'EMAIL'
+      ? 'the last email bounced — check the address'
+      : 'the last message could not be delivered — check the number';
+  }
+
   const consent =
     channel === 'EMAIL' ? member.emailConsent : channel === 'SMS' ? member.smsConsent : member.whatsappConsent;
-  return consent === 'OPTED_IN';
+  if (consent !== 'OPTED_IN') return 'not opted in';
+
+  return null;
 }
 
 /** One row's answer to "can we message this person?", in three letters. */
@@ -73,10 +94,8 @@ function ReachMarks({ member }: { member: Member }) {
   return (
     <span className="flex flex-wrap gap-1">
       {marks.map(([channel, label]) => {
-        const ok = reachableOn(member, channel);
-        const why = !(channel === 'EMAIL' ? member.email?.trim() : member.phone?.trim())
-          ? 'no address on file'
-          : 'not opted in';
+        const why = reachReason(member, channel);
+        const ok = why === null;
         return (
           <span
             key={channel}
@@ -175,12 +194,15 @@ export default async function SegmentMembersPage({
                 <p className="text-2xs font-medium uppercase tracking-wide text-ink-subtle">Reachable on {label}</p>
                 <p className="tnum mt-0.5 text-lg font-semibold text-ink">{count(row.reachable)}</p>
                 <p className="mt-0.5 text-2xs leading-snug text-ink-muted">
-                  {row.noAddress > 0
-                    ? `${count(row.noAddress)} without ${channel === 'EMAIL' ? 'an email' : 'a number'}`
-                    : null}
-                  {row.noAddress > 0 && row.noConsent > 0 ? ' · ' : null}
-                  {row.noConsent > 0 ? `${count(row.noConsent)} not opted in` : null}
-                  {row.noAddress === 0 && row.noConsent === 0 ? 'everyone in the segment' : null}
+                  {[
+                    row.noAddress > 0
+                      ? `${count(row.noAddress)} without ${channel === 'EMAIL' ? 'an email' : 'a number'}`
+                      : null,
+                    (row.undeliverable ?? 0) > 0 ? `${count(row.undeliverable)} undeliverable` : null,
+                    row.noConsent > 0 ? `${count(row.noConsent)} not opted in` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'everyone in the segment'}
                 </p>
               </Card>
             );

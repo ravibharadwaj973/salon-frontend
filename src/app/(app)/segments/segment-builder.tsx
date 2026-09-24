@@ -49,7 +49,10 @@ interface Preview {
   count: number;
   approximate: boolean;
   /** Per channel: who gets it, who has no address, who has not opted in. */
-  reach: Record<'WHATSAPP' | 'SMS' | 'EMAIL', { reachable: number; noAddress: number; noConsent: number }>;
+  reach: Record<
+    'WHATSAPP' | 'SMS' | 'EMAIL',
+    { reachable: number; noAddress: number; noConsent: number; undeliverable: number }
+  >;
   sample: Customer[];
 }
 
@@ -445,14 +448,17 @@ export function SegmentBuilder({ branches = [] }: { branches?: { id: string; nam
                       <div key={key} className="rounded-md bg-white/70 px-2.5 py-2 ring-1 ring-inset ring-brand-200">
                         <p className="text-2xs font-medium uppercase tracking-wide text-brand-700">{short}</p>
                         <p className="tnum text-sm font-semibold text-brand-900">{count(row.reachable)}</p>
-                        {/* Why the rest are missing, because the two have
-                            different fixes: collect addresses, or ask for
-                            consent. */}
+                        {/* Why the rest are missing, because each has a
+                            different fix: collect an address, correct a wrong
+                            one, or ask for consent. */}
                         <p className="mt-0.5 text-2xs leading-snug text-brand-700">
-                          {row.noAddress > 0 ? `${count(row.noAddress)} no ${key === 'EMAIL' ? 'email' : 'number'}` : null}
-                          {row.noAddress > 0 && row.noConsent > 0 ? ' · ' : null}
-                          {row.noConsent > 0 ? `${count(row.noConsent)} not opted in` : null}
-                          {row.noAddress === 0 && row.noConsent === 0 ? 'everyone who matches' : null}
+                          {[
+                            row.noAddress > 0 ? `${count(row.noAddress)} no ${key === 'EMAIL' ? 'email' : 'number'}` : null,
+                            (row.undeliverable ?? 0) > 0 ? `${count(row.undeliverable)} undeliverable` : null,
+                            row.noConsent > 0 ? `${count(row.noConsent)} not opted in` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || 'everyone who matches'}
                         </p>
                       </div>
                     );

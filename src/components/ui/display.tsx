@@ -52,13 +52,17 @@ export function Badge({
   children,
   tone = 'neutral',
   className,
+  title,
 }: {
   children: React.ReactNode;
   tone?: Tone;
   className?: string;
+  /** Hover detail — the provider's own wording, when a badge is standing in for it. */
+  title?: string;
 }) {
   return (
     <span
+      title={title}
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium ring-1 ring-inset',
         tones[tone],

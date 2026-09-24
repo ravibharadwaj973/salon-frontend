@@ -79,6 +79,9 @@ export interface SessionUser {
 }
 
 export type CustomerTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'VIP';
+/** What the last delivery attempt proved about an address. */
+export type ReachStatus = 'UNKNOWN' | 'OK' | 'UNDELIVERABLE';
+
 export type ConsentStatus = 'UNKNOWN' | 'OPTED_IN' | 'OPTED_OUT';
 
 export interface Customer {
@@ -191,6 +194,18 @@ export interface CustomerProfile extends Customer {
   whatsappConsent: ConsentStatus;
   smsConsent: ConsentStatus;
   emailConsent: ConsentStatus;
+  /**
+   * Whether the address still works, which is a different question from
+   * whether they consented. Set by the provider's own delivery report, and
+   * UNDELIVERABLE means future sends on that channel are skipped until the
+   * number or address is corrected.
+   */
+  whatsappStatus?: ReachStatus;
+  whatsappLastError?: string | null;
+  smsStatus?: ReachStatus;
+  smsLastError?: string | null;
+  emailStatus?: ReachStatus;
+  emailLastError?: string | null;
   anniversary: string | null;
   addressLine: string | null;
   city: string | null;
