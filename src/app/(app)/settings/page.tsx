@@ -15,6 +15,7 @@ import { date, fromNow, phone as formatPhone } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/permissions';
 import { bookingPageUrl, embedScriptUrl } from '@/lib/public-urls';
 import type { BranchSummary, PageLayout, SessionUser, UserRole } from '@/lib/types';
+import { LogoCard } from './logo-card';
 
 export const metadata: Metadata = { title: 'Settings' };
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,7 @@ export const dynamic = 'force-dynamic';
 interface Tenant {
   id: string;
   name: string;
+  logoUrl: string | null;
   slug: string;
   legalName: string | null;
   gstin: string | null;
@@ -136,6 +138,14 @@ export default async function SettingsPage({
           </Card>
 
           <div className="space-y-5">
+            {tenant ? (
+              <LogoCard
+                logoUrl={tenant.logoUrl}
+                salonName={tenant.name}
+                canEdit={user?.permissions.includes('tenant.manage') ?? false}
+              />
+            ) : null}
+
             {tenant ? (
               <BookingEmbedCard
                 salonName={tenant.name}
