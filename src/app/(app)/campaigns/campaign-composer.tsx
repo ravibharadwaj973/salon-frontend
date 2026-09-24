@@ -11,10 +11,10 @@ import { Badge } from '@/components/ui/display';
 import { count, money } from '@/lib/format';
 import type { Campaign, MessageTemplate, Segment } from '@/lib/types';
 
-type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
-type Reach = Record<ChannelKey, { reachable: number; noAddress: number; noConsent: number }>;
+export type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
+export type Reach = Record<ChannelKey, { reachable: number; noAddress: number; noConsent: number }>;
 
-const CHANNEL_WORD: Record<string, string> = { WHATSAPP: 'WhatsApp', SMS: 'SMS', EMAIL: 'email' };
+export const CHANNEL_WORD: Record<string, string> = { WHATSAPP: 'WhatsApp', SMS: 'SMS', EMAIL: 'email' };
 
 /**
  * A campaign goes to thousands of real people and cannot be recalled.
@@ -332,7 +332,7 @@ export function CampaignComposer({
 }
 
 /** The last screen before thousands of messages leave the building. */
-function ConfirmStep({
+export function ConfirmStep({
   name,
   segmentName,
   segmentSize,
@@ -372,7 +372,9 @@ function ConfirmStep({
           ['Audience', segmentName],
           ['Template', templateName],
           ['Channel', word],
-          ['When', sendNow ? 'Now' : scheduledAt.replace('T', ' at ')],
+          // No time at all means a draft: Send again makes one, and a draft
+          // has not been scheduled by anybody yet.
+          ['When', sendNow ? 'Now' : scheduledAt ? scheduledAt.replace('T', ' at ') : 'Saved as a draft — not sent yet'],
         ].map(([label, value]) => (
           <div key={label} className="flex items-start justify-between gap-4 px-3 py-2">
             <dt className="text-xs text-ink-muted">{label}</dt>

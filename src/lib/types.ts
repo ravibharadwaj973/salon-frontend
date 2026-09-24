@@ -818,6 +818,8 @@ export interface Campaign {
   bookingCount: number;
   revenue: Money;
   cost: Money;
+  /** What it costs to send one, so a review can total it before anybody presses send. */
+  costPerMessage?: Money;
   segment: { id: string; name: string; lastCount?: number } | null;
   template: { id: string; name: string; category?: string } | null;
   performance?: {

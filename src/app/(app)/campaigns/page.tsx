@@ -162,7 +162,17 @@ export default async function CampaignsPage({
                         does not need a second copy of itself. */}
                     <TD align="right">
                       {campaign.status === 'COMPLETED' ? (
-                        <SendAgain campaignId={campaign.id} name={campaign.name} />
+                        <SendAgain
+                          campaignId={campaign.id}
+                          name={campaign.name}
+                          channel={campaign.channel as 'WHATSAPP' | 'SMS' | 'EMAIL'}
+                          segmentId={campaign.segment?.id ?? null}
+                          segmentName={campaign.segment?.name ?? 'the segment'}
+                          segmentSize={campaign.segment?.lastCount ?? 0}
+                          templateName={campaign.template?.name ?? '—'}
+                          templateCategory={campaign.template?.category ?? 'MARKETING'}
+                          costPerMessage={Number(campaign.costPerMessage ?? 0)}
+                        />
                       ) : null}
                     </TD>
                   </TR>
