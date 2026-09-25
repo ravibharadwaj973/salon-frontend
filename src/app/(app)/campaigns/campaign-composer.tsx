@@ -9,6 +9,7 @@ import { Field, Input, Select } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { Badge } from '@/components/ui/display';
 import { count, money } from '@/lib/format';
+import { TemplateFields, type Readiness } from './template-fields';
 import type { Campaign, MessageTemplate, Segment } from '@/lib/types';
 
 export type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
@@ -59,6 +60,15 @@ export function CampaignComposer({
    */
   const [createdId, setCreatedId] = useState<string | null>(null);
 
+  /**
+   * Values the sender types for the blanks a campaign cannot fill by itself.
+   * Kept out of `form` because changing a template must clear them: values
+   * typed for one template mean nothing in another, and carrying them over
+   * would silently satisfy the readiness check with the wrong text.
+   */
+  const [variables, setVariables] = useState<Record<string, string>>({});
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+
   const [form, setForm] = useState({
     name: '',
     segmentId: defaultSegmentId ?? segments[0]?.id ?? '',
@@ -72,6 +82,12 @@ export function CampaignComposer({
     setForm((current) => ({ ...current, [key]: value }));
     // Any edit invalidates a campaign already created from an earlier attempt.
     setCreatedId(null);
+    // A different template has different blanks, so whatever was typed for the
+    // old one is discarded rather than quietly reused.
+    if (key === 'templateId') {
+      setVariables({});
+      setReadiness(null);
+    }
   };
 
   const segment = segments.find((s) => s.id === form.segmentId);
@@ -115,6 +131,24 @@ export function CampaignComposer({
       setError('Pick a date and time, or switch back to sending now.');
       return;
     }
+    /**
+     * Stopped here rather than at the send. A campaign whose template cannot be
+     * filled used to be accepted, scheduled, and then skipped once per
+     * recipient — reported as a success that charged nothing and delivered
+     * nothing.
+     */
+    if (readiness && readiness.blocked.length > 0) {
+      setError(readiness.blocked[0]!.reason ?? 'This template cannot be used for a campaign.');
+      return;
+    }
+    if (readiness && readiness.missing.length > 0) {
+      const names = readiness.missing.map((v) => v.label);
+      const list = names.length === 1 ? names[0]! : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+      setError(
+        `Fill in ${list} first. Left empty, every customer would read a blank where the value should be, so nothing would be sent.`,
+      );
+      return;
+    }
     setConfirming(true);
   }
 
@@ -123,6 +157,8 @@ export function CampaignComposer({
     setConfirming(false);
     setReach(null);
     setCreatedId(null);
+    setVariables({});
+    setReadiness(null);
   }
 
   async function send() {
@@ -137,6 +173,7 @@ export function CampaignComposer({
             channel,
             segmentId: form.segmentId,
             templateId: form.templateId,
+            variables,
             costPerMessage: form.costPerMessage,
             scheduledAt: form.sendNow ? undefined : form.scheduledAt || undefined,
           })
@@ -285,6 +322,16 @@ export function CampaignComposer({
                   </p>
                 ) : null}
               </div>
+            ) : null}
+
+            {template ? (
+              <TemplateFields
+                templateId={template.id}
+                bodyText={template.bodyText}
+                values={variables}
+                onChange={setVariables}
+                onReadiness={setReadiness}
+              />
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
