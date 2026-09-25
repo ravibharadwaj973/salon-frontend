@@ -172,6 +172,7 @@ export default async function CampaignsPage({
                           templateName={campaign.template?.name ?? '—'}
                           templateCategory={campaign.template?.category ?? 'MARKETING'}
                           costPerMessage={Number(campaign.costPerMessage ?? 0)}
+                          attributionWindowDays={campaign.attributionWindowDays ?? 14}
                         />
                       ) : null}
                     </TD>

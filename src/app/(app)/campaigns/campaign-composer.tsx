@@ -10,6 +10,7 @@ import { Modal, useToast } from '@/components/ui/overlay';
 import { Badge } from '@/components/ui/display';
 import { count, money } from '@/lib/format';
 import { TemplateFields, type Readiness } from './template-fields';
+import { ObjectivePicker, type Attribution } from './objective-picker';
 import type { Campaign, MessageTemplate, Segment } from '@/lib/types';
 
 export type ChannelKey = 'WHATSAPP' | 'SMS' | 'EMAIL';
@@ -68,6 +69,16 @@ export function CampaignComposer({
    */
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [readiness, setReadiness] = useState<Readiness | null>(null);
+
+  /**
+   * How this campaign will be judged. Separate from `form` because the
+   * objective pre-fills the window, so the three move together.
+   */
+  const [attribution, setAttribution] = useState<Attribution>({
+    objective: 'OTHER',
+    attributionWindowDays: 14,
+    conversionEvents: ['BOOKING', 'VISIT', 'REVENUE'],
+  });
 
   const [form, setForm] = useState({
     name: '',
@@ -174,6 +185,9 @@ export function CampaignComposer({
             segmentId: form.segmentId,
             templateId: form.templateId,
             variables,
+            objective: attribution.objective,
+            attributionWindowDays: attribution.attributionWindowDays,
+            conversionEvents: attribution.conversionEvents,
             costPerMessage: form.costPerMessage,
             scheduledAt: form.sendNow ? undefined : form.scheduledAt || undefined,
           })
@@ -255,6 +269,7 @@ export function CampaignComposer({
             sendNow={form.sendNow}
             scheduledAt={form.scheduledAt}
             estimatedCost={estimatedCost}
+            attributionWindowDays={attribution.attributionWindowDays}
             error={error}
           />
         ) : (
@@ -334,6 +349,8 @@ export function CampaignComposer({
               />
             ) : null}
 
+            <ObjectivePicker value={attribution} onChange={setAttribution} />
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Cost per message (₹)" hint="Used to work out ROI">
                 {({ id }) => (
@@ -394,6 +411,7 @@ export function ConfirmStep({
   sendNow,
   scheduledAt,
   estimatedCost,
+  attributionWindowDays,
   error,
 }: {
   name: string;
@@ -407,6 +425,7 @@ export function ConfirmStep({
   sendNow: boolean;
   scheduledAt: string;
   estimatedCost: number;
+  attributionWindowDays: number;
   error: string | null;
 }) {
   const row = reach?.[channel];
@@ -425,6 +444,7 @@ export function ConfirmStep({
           // No time at all means a draft: Send again makes one, and a draft
           // has not been scheduled by anybody yet.
           ['When', sendNow ? 'Now' : scheduledAt ? scheduledAt.replace('T', ' at ') : 'Saved as a draft — not sent yet'],
+          ['Measured for', `${attributionWindowDays} days after each delivery`],
         ].map(([label, value]) => (
           <div key={label} className="flex items-start justify-between gap-4 px-3 py-2">
             <dt className="text-xs text-ink-muted">{label}</dt>

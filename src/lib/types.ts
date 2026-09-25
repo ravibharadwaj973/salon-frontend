@@ -831,9 +831,22 @@ export interface Campaign {
   /** Customers who wrote back. WhatsApp and SMS only — an email reply goes to the salon's inbox, not to us. */
   repliedCount: number;
   failedCount: number;
+  /** Read, clicked or replied — the stage between "it arrived" and "they came". */
+  engagedCount?: number;
+  /** Made an appointment inside their window. */
   bookingCount: number;
+  /** Actually turned up and was billed. A booking that no-showed is not here. */
+  visitCount?: number;
   revenue: Money;
   cost: Money;
+  /** Days after EACH recipient's delivery that a booking or visit still counts. */
+  attributionWindowDays: number;
+  objective?: string;
+  objectiveLabel?: string;
+  /** Why this window length suits this kind of campaign. */
+  windowRationale?: string;
+  /** True while the window is still open, so a zero means "not counted yet". */
+  attributionPending?: boolean;
   /** What it costs to send one, so a review can total it before anybody presses send. */
   costPerMessage?: Money;
   segment: { id: string; name: string; lastCount?: number } | null;
@@ -844,13 +857,20 @@ export interface Campaign {
     read: number;
     clicked: number;
     failed: number;
+    engaged: number;
     bookings: number;
+    visits: number;
     revenue: Money;
     cost: Money;
     roi: number | null;
     deliveryRatePct: number;
     readRatePct: number;
-    conversionRatePct: number;
+    engagementRatePct: number;
+    /** Against delivered, not sent: a message that never arrived cannot have failed to convert. */
+    bookingRatePct: number;
+    visitRatePct: number;
+    costPerVisit: Money | null;
+    revenuePerMessageSent: Money | null;
   };
 }
 

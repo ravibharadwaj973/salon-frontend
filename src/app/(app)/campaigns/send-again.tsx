@@ -40,6 +40,7 @@ export function SendAgain({
   templateName,
   templateCategory,
   costPerMessage,
+  attributionWindowDays,
 }: {
   campaignId: string;
   name: string;
@@ -49,6 +50,8 @@ export function SendAgain({
   segmentSize: number;
   templateName: string;
   templateCategory: string;
+  /** Carried from the original: a copy is sent for the same reason, so it is measured the same way. */
+  attributionWindowDays: number;
   costPerMessage: number;
 }) {
   const router = useRouter();
@@ -138,6 +141,7 @@ export function SendAgain({
           segmentName={segmentName}
           segmentSize={segmentSize}
           templateName={templateName}
+          attributionWindowDays={attributionWindowDays}
           channel={channel}
           marketing={templateCategory === 'MARKETING'}
           reach={reach}

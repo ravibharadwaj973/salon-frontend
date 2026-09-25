@@ -2,7 +2,7 @@ import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Hourglass } from 'lucide-react';
 import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Badge, Card, CardBody, CardHeader, EmptyState, StatTile, StatusBadge } from '@/components/ui/display';
 import { CampaignFunnel, type FunnelStage } from './funnel';
@@ -110,7 +110,28 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 campaign.channel === 'EMAIL'
                   ? null
                   : { key: 'replied', label: 'Replied', value: campaign.repliedCount },
-                { key: 'bookings', label: 'Booked', value: campaign.bookingCount },
+                // The stage the funnel was missing. Between "it arrived" and
+                // "they came" is "they looked", and without it a campaign
+                // nobody opened looks the same as one everybody opened and
+                // ignored.
+                {
+                  key: 'engaged',
+                  label: 'Engaged',
+                  value: campaign.engagedCount ?? 0,
+                  note: 'read, clicked or replied',
+                },
+                {
+                  key: 'bookings',
+                  label: 'Booked',
+                  value: campaign.bookingCount,
+                  note: 'made an appointment inside the window',
+                },
+                {
+                  key: 'visits',
+                  label: 'Came in',
+                  value: campaign.visitCount ?? 0,
+                  note: 'actually turned up and was billed',
+                },
               ].filter(Boolean) as FunnelStage[]
             }
           />
@@ -134,18 +155,41 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
 
       <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="Bookings"
+          label="Booked"
           value={count(campaign.bookingCount)}
-          hint={performance ? `${percent(performance.conversionRatePct, 1)} conversion` : undefined}
+          hint={performance ? `${percent(performance.bookingRatePct, 1)} of delivered` : undefined}
+        />
+        <StatTile
+          label="Came in"
+          value={count(campaign.visitCount ?? 0)}
+          hint={performance ? `${percent(performance.visitRatePct, 1)} of delivered` : undefined}
         />
         <StatTile label="Revenue" value={money(campaign.revenue)} tone="positive" />
-        <StatTile label="Cost" value={money(campaign.cost)} />
         <StatTile
-          label="ROI"
-          value={performance?.roi !== null && performance?.roi !== undefined ? percent(performance.roi, 0) : '—'}
-          tone={(performance?.roi ?? 0) > 0 ? 'positive' : 'neutral'}
+          label="Cost per visit"
+          value={performance?.costPerVisit ? money(performance.costPerVisit) : '—'}
+          hint={`${money(campaign.cost)} spent`}
         />
       </section>
+
+      {/* The window, stated. A number attributed to a campaign is meaningless
+          without the period it was attributed over, and the period is the
+          owner's own choice rather than a constant. */}
+      <p className="mt-3 text-2xs leading-relaxed text-ink-subtle">
+        Bookings and visits are counted for{' '}
+        <strong className="font-medium text-ink-muted">{campaign.attributionWindowDays} days</strong> after each
+        customer received this — measured from their own delivery, so somebody reached on the last day of the send
+        gets the same window as the first.
+        {campaign.windowRationale ? ` ${campaign.windowRationale}` : ''}
+      </p>
+
+      {campaign.attributionPending ? (
+        <p className="mt-2 flex items-start gap-2 rounded-lg bg-stone-50 p-3 text-xs leading-relaxed text-ink-muted">
+          <Hourglass className="mt-px h-3.5 w-3.5 shrink-0" />
+          The attribution window is still open, so bookings and visits are not final yet. They are counted once it
+          closes — a zero here means &ldquo;not counted yet&rdquo;, not &ldquo;nobody came&rdquo;.
+        </p>
+      ) : null}
 
       {campaign.template ? (
         <Card className="mt-5">
