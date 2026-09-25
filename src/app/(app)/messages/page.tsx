@@ -189,11 +189,13 @@ function outcome(message: MessageLogEntry): { text: string; tone: string } {
 export default async function MessagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; status?: string; channel?: string; campaignId?: string }>;
+  searchParams: Promise<{ page?: string; status?: string; channel?: string; campaignId?: string; journeyId?: string }>;
 }) {
   const params = await searchParams;
   const page = Number(params.page ?? 1);
   const campaignId = params.campaignId ?? '';
+  // An automation's messages, reached from its own page. Same log, narrowed.
+  const journeyId = params.journeyId ?? '';
   const channel = CHANNELS.some((c) => c.key === params.channel) ? (params.channel ?? '') : '';
 
   // Switching to SMS while "Clicked" is selected would show an empty table and
@@ -208,6 +210,7 @@ export default async function MessagesPage({
       status: status || undefined,
       channel: channel || undefined,
       campaignId: campaignId || undefined,
+      journeyId: journeyId || undefined,
     },
   });
 
@@ -221,16 +224,18 @@ export default async function MessagesPage({
   // One link builder for both rows: picking a channel keeps the status you
   // were looking at, and picking a status keeps the channel. Dropping either
   // would send "Problems on email" back to the whole salon's log.
-  const href = (next: { channel?: string; status?: string; campaignId?: string }) => {
+  const href = (next: { channel?: string; status?: string; campaignId?: string; journeyId?: string }) => {
     const query = new URLSearchParams();
     const nextChannel = next.channel ?? channel;
     const nextStatus = next.status ?? status;
     const nextCampaign = next.campaignId ?? campaignId;
+    const nextJourney = next.journeyId ?? journeyId;
     if (nextChannel) query.set('channel', nextChannel);
     // A status that does not exist on the channel being moved to is dropped
     // here too, so the link never points at an empty table.
     if (nextStatus && filtersFor(nextChannel).some((f) => f.key === nextStatus)) query.set('status', nextStatus);
     if (nextCampaign) query.set('campaignId', nextCampaign);
+    if (nextJourney) query.set('journeyId', nextJourney);
     const qs = query.toString();
     return qs ? `/messages?${qs}` : '/messages';
   };
@@ -248,7 +253,9 @@ export default async function MessagesPage({
         description={
           campaignId
             ? `Every message ${campaignName ? `“${campaignName}”` : 'this campaign'} sent — and what became of each one.`
-            : 'What was sent, what arrived, and what did not — with the reason.'
+            : journeyId
+              ? 'Every message this automation has sent — and what became of each one.'
+              : 'What was sent, what arrived, and what did not — with the reason.'
         }
       />
 
@@ -258,6 +265,23 @@ export default async function MessagesPage({
             {campaignName ?? 'One campaign'}
           </span>
           <Link href={href({ campaignId: '' })} className="text-ink-muted hover:underline">
+            Show every message
+          </Link>
+        </div>
+      ) : null}
+
+      {/* The same chip for an automation. Its name is not on the row the way a
+          campaign's is, so this says what it is narrowed to without pretending
+          to know which one. */}
+      {journeyId ? (
+        <div className="mb-4 flex items-center gap-3 text-xs">
+          <span className="rounded-full bg-brand-50 px-2.5 py-1 font-medium text-brand-700 ring-1 ring-inset ring-brand-200">
+            One automation
+          </span>
+          <Link href={`/journeys/${journeyId}`} className="text-ink-muted hover:underline">
+            Back to the automation
+          </Link>
+          <Link href={href({ journeyId: '' })} className="text-ink-muted hover:underline">
             Show every message
           </Link>
         </div>
@@ -403,6 +427,7 @@ export default async function MessagesPage({
                   status: status || undefined,
                   channel: channel || undefined,
                   campaignId: campaignId || undefined,
+                  journeyId: journeyId || undefined,
                 }}
               />
             ) : null}

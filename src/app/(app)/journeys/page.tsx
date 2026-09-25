@@ -1,38 +1,16 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ArrowDown, Workflow } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { JourneyToggle } from './journey-toggle';
+import { ACTION_LABEL, triggerLabel } from './labels';
 import { count, duration } from '@/lib/format';
 import type { Journey, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Journeys' };
 export const dynamic = 'force-dynamic';
 
-const TRIGGER_LABEL: Record<string, string> = {
-  APPOINTMENT_BOOKED: 'When an appointment is booked',
-  APPOINTMENT_COMPLETED: 'After a visit is completed',
-  APPOINTMENT_CANCELLED: 'When an appointment is cancelled',
-  FIRST_VISIT: 'After a customer’s first visit',
-  INVOICE_PAID: 'When a bill is paid',
-  NO_VISIT_DAYS: 'When a customer goes quiet',
-  MEMBERSHIP_EXPIRING: 'Before a membership expires',
-  PACKAGE_EXPIRING: 'Before a package expires',
-  BIRTHDAY: 'On a birthday',
-  LEAD_CREATED: 'When a new enquiry arrives',
-  REVIEW_REQUEST: 'After feedback is left',
-};
-
-const ACTION_LABEL: Record<string, string> = {
-  SEND_MESSAGE: 'Send message',
-  ADD_TAG: 'Add tag',
-  REMOVE_TAG: 'Remove tag',
-  ADD_LOYALTY_POINTS: 'Award points',
-  CREATE_TASK: 'Create a task',
-  ADD_TO_SEGMENT: 'Add to segment',
-  WAIT: 'Wait',
-  EXIT_IF_BOOKED: 'Stop if they book',
-};
 
 export default async function JourneysPage() {
   const [{ data: journeys }, user] = await Promise.all([
@@ -72,9 +50,13 @@ export default async function JourneysPage() {
             <Card key={journey.id} className="flex flex-col">
               <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-5 py-4">
                 <div className="min-w-0">
-                  <h2 className="text-sm font-semibold text-ink">{journey.name}</h2>
+                  <h2 className="text-sm font-semibold text-ink">
+                    <Link href={`/journeys/${journey.id}`} className="hover:text-brand-700 hover:underline">
+                      {journey.name}
+                    </Link>
+                  </h2>
                   <p className="mt-0.5 text-xs text-ink-muted">
-                    {TRIGGER_LABEL[journey.trigger] ?? journey.trigger.replace(/_/g, ' ').toLowerCase()}
+                    {triggerLabel(journey.trigger)}
                     {journey.trigger === 'NO_VISIT_DAYS' && journey.triggerConfig?.days
                       ? ` (${String(journey.triggerConfig.days)} days)`
                       : ''}
@@ -114,15 +96,23 @@ export default async function JourneysPage() {
                 </ol>
               </div>
 
-              {journey.stats ? (
-                <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-stone-200 px-5 py-3 text-2xs text-ink-subtle">
-                  {Object.entries(journey.stats.runs).map(([status, value]) => (
-                    <span key={status}>
-                      {status.toLowerCase()}: <span className="tnum font-medium text-ink">{value}</span>
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-stone-200 px-5 py-3 text-2xs text-ink-subtle">
+                {journey.stats
+                  ? Object.entries(journey.stats.runs).map(([status, value]) => (
+                      <span key={status}>
+                        {status.toLowerCase()}: <span className="tnum font-medium text-ink">{value}</span>
+                      </span>
+                    ))
+                  : null}
+                {/* A run count is not a result. This is the way through to
+                    whether the messages it sent actually arrived. */}
+                <Link
+                  href={`/journeys/${journey.id}`}
+                  className="ml-auto font-medium text-brand-700 hover:underline"
+                >
+                  See how it is doing
+                </Link>
+              </div>
             </Card>
           ))}
         </div>
