@@ -117,6 +117,17 @@ export default async function SettingsPage({
         >
           Messaging
         </Link>
+
+        {/* Owner only, and the page says so rather than the link hiding — an
+            owner looking for where GST lives should not have to guess, and a
+            manager should learn why they cannot change it rather than never
+            find out it exists. */}
+        <Link
+          href="/settings/tax"
+          className="rounded-md px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+        >
+          Tax &amp; invoices
+        </Link>
       </div>
 
       {tab === 'salon' ? (
