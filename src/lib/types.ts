@@ -936,14 +936,28 @@ export interface DashboardSnapshot {
 
 export interface DashboardResponse {
   date: string;
+  /** The day the account was created — the earliest day there can be an answer for. */
+  earliestDate: string;
+  /** Today. There is no answer for a day that has not happened. */
+  latestDate: string;
+  /** True when the requested day fell outside those bounds and was moved. */
+  clamped: boolean;
+  isToday: boolean;
+  /** False when the day before falls outside the account's life, so there is nothing to compare against. */
+  comparable: boolean;
   today: DashboardSnapshot;
   previous: DashboardSnapshot;
+  /**
+   * Null when the previous day is before the salon existed. A -100% against a
+   * day that never happened reads as a collapse, so it is withheld rather than
+   * computed.
+   */
   comparison: {
     revenueChangePct: number;
     appointmentsChangePct: number;
     newCustomersChangePct: number;
     averageBillChangePct: number;
-  };
+  } | null;
 }
 
 export interface GrowthResponse {

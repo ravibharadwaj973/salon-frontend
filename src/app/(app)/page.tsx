@@ -16,12 +16,14 @@ import { ButtonLink } from '@/components/ui/button';
 import { count, fullName, money, moneyCompact, time } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { Appointment, BusinessAlert, DashboardResponse, Insight } from '@/lib/types';
+import { DayPicker } from './day-picker';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
 
 interface TodaySummary {
   total: number;
+  isToday: boolean;
   counts: Record<string, number>;
   completed: number;
   noShows: number;
@@ -30,21 +32,31 @@ interface TodaySummary {
   unconfirmedTomorrow: number;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  // A plain query parameter, so a particular day is a link somebody can send.
+  const asked = (await searchParams).date;
+
   const [dashboard, todayList, alerts, insights] = await Promise.all([
-    apiFetchSafe<DashboardResponse>('/analytics/dashboard'),
-    apiFetchSafe<TodaySummary>('/appointments/today'),
+    apiFetchSafe<DashboardResponse>('/analytics/dashboard', { query: asked ? { date: asked } : {} }),
+    apiFetchSafe<TodaySummary>('/appointments/today', { query: asked ? { date: asked } : {} }),
     apiFetchList<BusinessAlert>('/analytics/alerts', { query: { pageSize: 8 } }).catch(() => null),
     apiFetchSafe<{ insights: Insight[] }>('/analytics/insights'),
   ]);
 
   const today = dashboard?.today;
   const change = dashboard?.comparison;
+  const viewingToday = dashboard?.isToday ?? true;
 
   return (
     <>
       <PageHeader
-        title="Today"
+        // The heading follows the day being looked at. Leaving it as "Today"
+        // over last Saturday's takings is how a number gets misread.
+        title={viewingToday ? 'Today' : 'That day'}
         description={dashboard ? new Date(dashboard.date).toDateString() : undefined}
         action={
           <>
@@ -59,6 +71,28 @@ export default async function DashboardPage() {
           </>
         }
       />
+
+      {dashboard ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+          <DayPicker date={dashboard.date} earliest={dashboard.earliestDate} latest={dashboard.latestDate} />
+          {!viewingToday ? (
+            <p className="text-2xs text-ink-subtle">
+              Showing a past day. Figures are final; nothing here updates.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* The one case where the day shown is not the day asked for: a stale
+          bookmark, or a URL typed by hand. Said plainly rather than silently
+          answering a different question. */}
+      {dashboard?.clamped ? (
+        <p className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+          <Info className="mt-px h-4 w-4 shrink-0" />
+          That day is outside your account&rsquo;s history, so this is {new Date(dashboard.date).toDateString()} instead.
+          Your account starts on {new Date(dashboard.earliestDate).toDateString()}.
+        </p>
+      ) : null}
 
       {!dashboard ? (
         <Card>
@@ -91,8 +125,14 @@ export default async function DashboardPage() {
           </section>
 
           {/* Money in vs money out — the line owners rarely see day to day. */}
+          {dashboard && !dashboard.comparable ? (
+            <p className="mt-3 text-2xs text-ink-subtle">
+              No comparison shown — the day before this one is before your account existed.
+            </p>
+          ) : null}
+
           <section className="mt-3 grid gap-3 sm:grid-cols-3">
-            <StatTile label="Today's expenses" value={money(today?.expenses)} href="/expenses" />
+            <StatTile label={viewingToday ? "Today's expenses" : 'Expenses'} value={money(today?.expenses)} href="/expenses" />
             <StatTile
               label="Gross profit"
               value={money(today?.grossProfit)}
@@ -156,8 +196,12 @@ export default async function DashboardPage() {
         {/* Next up */}
         <Card>
           <CardHeader
-            title="Next up"
-            subtitle={todayList ? `${count(todayList.total)} booked today` : undefined}
+            // "Next up" over a past day is wrong twice: nothing is next, and
+            // the list below is what the day held rather than what is coming.
+            title={viewingToday ? 'Next up' : "That day's appointments"}
+            subtitle={
+              todayList ? `${count(todayList.total)} booked ${viewingToday ? 'today' : 'that day'}` : undefined
+            }
             action={
               <Link href="/calendar" className="text-xs font-medium text-brand-700 hover:underline">
                 Calendar
@@ -187,13 +231,19 @@ export default async function DashboardPage() {
           ) : (
             <EmptyState
               icon={CalendarDays}
-              title="Nothing left today"
-              description="No more confirmed appointments on the books for today."
+              title={viewingToday ? 'Nothing left today' : 'No appointments that day'}
+              description={
+                viewingToday
+                  ? 'No more confirmed appointments on the books for today.'
+                  : 'Nobody was booked in on this day.'
+              }
               action={
-                <ButtonLink href="/calendar" size="sm" variant="secondary">
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Book someone in
-                </ButtonLink>
+                viewingToday ? (
+                  <ButtonLink href="/calendar" size="sm" variant="secondary">
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Book someone in
+                  </ButtonLink>
+                ) : undefined
               }
             />
           )}
