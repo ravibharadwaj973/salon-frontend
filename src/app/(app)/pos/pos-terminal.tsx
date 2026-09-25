@@ -153,24 +153,41 @@ export function PosTerminal({
 
     const netTotal = Math.max(0, subtotal - billDiscount);
 
-    // Tax, three ways — the same three the API knows:
-    //   GST off:                 nothing charged, nothing shown.
-    //   GST on, prices inclusive: tax is inside the menu price; back it out for display.
-    //   GST on, prices exclusive: tax goes on top of the menu price.
+    /**
+     * Tax, four ways — the same four the API computes, because the till and the
+     * bill disagreeing is the one thing nobody forgives:
+     *
+     *   GST on,  inclusive prices  tax sits inside the menu price; shown, not added.
+     *   GST on,  exclusive prices  tax goes on top of the menu price.
+     *   GST off, exclusive prices  nothing to do; the menu price is the base.
+     *   GST off, INCLUSIVE prices  the tax comes OUT and the total drops.
+     *
+     * That last one used to behave like the third: ₹2,800 stayed ₹2,800 with the
+     * GST line simply hidden. But on inclusive pricing ₹2,800 is ₹2,372.88 of
+     * service and ₹427.12 of tax, so charging ₹2,800 without GST did not remove
+     * the tax — it kept it and stopped declaring it. The customer paid a
+     * tax-inclusive price for a bill that cannot support a claim, and the salon
+     * was holding ₹427.12 it had not accounted for.
+     */
+    const embedded = (net: number, ratePct: number) => net - (net * 100) / (100 + ratePct);
+
     const taxByLine = lines.map((line) => {
       const lineNet = Math.max(0, line.unitPrice * line.quantity - line.discount);
       const share = subtotal > 0 ? lineNet / subtotal : 0;
       const afterBillDiscount = lineNet - billDiscount * share;
-      if (!gst) return 0;
       return billing.pricesIncludeTax
-        ? afterBillDiscount - (afterBillDiscount * 100) / (100 + line.taxRatePct)
+        ? embedded(afterBillDiscount, line.taxRatePct)
         : (afterBillDiscount * line.taxRatePct) / 100;
     });
     const tax = taxByLine.reduce((sum, t) => sum + t, 0);
+
     const taxIncluded = gst && billing.pricesIncludeTax ? tax : 0;
     const taxAdded = gst && !billing.pricesIncludeTax ? tax : 0;
+    // Taken off the bill rather than pocketed. Shown as its own line, because a
+    // total that quietly shrinks is a total the person at the counter distrusts.
+    const taxRemoved = !gst && billing.pricesIncludeTax ? tax : 0;
 
-    const beforeRounding = netTotal + taxAdded;
+    const beforeRounding = netTotal + taxAdded - taxRemoved;
     const grandTotal = Math.round(beforeRounding);
     const roundOff = grandTotal - beforeRounding;
 
@@ -186,6 +203,7 @@ export function PosTerminal({
       billDiscount,
       taxIncluded,
       taxAdded,
+      taxRemoved,
       grandTotal,
       roundOff,
       loyaltyValue,
@@ -753,7 +771,9 @@ export function PosTerminal({
                       ? billing.pricesIncludeTax
                         ? 'GST is inside the menu price and shown on the bill.'
                         : 'GST is added on top of the menu price.'
-                      : 'No GST charged or shown. Not counted in the GST report.'}
+                      : billing.pricesIncludeTax
+                        ? 'The GST inside the menu price is taken off, so the customer pays less. Not counted in the GST report.'
+                        : 'No GST charged or shown. Not counted in the GST report.'}
                 </p>
               </div>
               {billing.canChooseGst && billing.hasGstin ? (
@@ -784,6 +804,11 @@ export function PosTerminal({
                 <Row label="Bill discount" value={`− ${moneyExact(totals.billDiscount)}`} tone="negative" />
               ) : null}
               {totals.taxAdded > 0 ? <Row label="GST" value={moneyExact(totals.taxAdded)} /> : null}
+              {/* The reduction, named. Without this row the total simply drops
+                  by an unexplained amount when the switch is flipped. */}
+              {totals.taxRemoved > 0 ? (
+                <Row label="GST removed" value={`− ${moneyExact(totals.taxRemoved)}`} tone="negative" />
+              ) : null}
               {totals.roundOff !== 0 ? <Row label="Round off" value={moneyExact(totals.roundOff)} muted /> : null}
               <div className="flex items-baseline justify-between border-t border-stone-200 pt-2">
                 <dt className="text-sm font-semibold text-ink">Total</dt>
@@ -794,7 +819,9 @@ export function PosTerminal({
                   ? totals.taxIncluded > 0
                     ? `Includes ${moneyExact(totals.taxIncluded)} GST`
                     : 'GST shown above'
-                  : 'No GST on this bill'}
+                  : totals.taxRemoved > 0
+                    ? `${moneyExact(totals.taxRemoved)} GST taken off — the customer pays less`
+                    : 'No GST on this bill'}
               </p>
             </dl>
 
