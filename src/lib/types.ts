@@ -851,6 +851,20 @@ export interface Campaign {
   followUpOfId?: string | null;
   /** Which outcome group it goes to — resolved afresh at send time, not frozen. */
   followUpAudience?: string | null;
+  /**
+   * What the app actually KNOWS about delivery, as against what it can show.
+   * "Nothing heard back" and "did not arrive" are opposite conclusions and the
+   * screen must not print one when it means the other.
+   */
+  receipts?: {
+    /** Accepted by the provider, no status callback since. */
+    awaiting: number;
+    anyForCampaign: boolean;
+    /** The most recent receipt for any message this salon has sent. */
+    lastAnywhereAt: string | null;
+    /** No receipt has ever arrived, anywhere — the webhook, not the numbers. */
+    looksUnwired: boolean;
+  };
   /** What it costs to send one, so a review can total it before anybody presses send. */
   costPerMessage?: Money;
   segment: { id: string; name: string; lastCount?: number } | null;

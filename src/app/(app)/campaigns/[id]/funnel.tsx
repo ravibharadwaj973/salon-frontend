@@ -44,6 +44,25 @@ export interface FunnelStage {
    * first number will conclude its message worked five times better than it did.
    */
   sequential?: boolean;
+  /**
+   * Of the people who did not reach this stage, how many are UNKNOWN rather
+   * than lost.
+   *
+   * The distinction the chart could not make, and the one that matters most.
+   * A campaign showing
+   *
+   *     Sent 4 · Delivered 0 · 4 did not get this far
+   *
+   * was asserting four failures. What had happened is that WhatsApp accepted
+   * all four and never sent a status callback, so the app knows nothing about
+   * them either way. Those are opposite conclusions — one says the numbers are
+   * wrong, the other says the webhook is not wired up — and a salon acts very
+   * differently on each.
+   *
+   * Zero is a measurement. This is the absence of one, and it is drawn
+   * differently so the two can never be read as the same thing.
+   */
+  unreported?: number;
 }
 
 export function CampaignFunnel({ stages }: { stages: FunnelStage[] }) {
@@ -82,6 +101,11 @@ export function CampaignFunnel({ stages }: { stages: FunnelStage[] }) {
         // this far" — not clicking is not a failure to arrive somewhere.
         const lost = stage.sequential && previousSequential !== null ? previousSequential - stage.value : 0;
 
+        // Of that shortfall, the part nobody has heard anything about. Capped
+        // at the shortfall so a late receipt can never make the note nonsense.
+        const unknown = Math.min(stage.unreported ?? 0, Math.max(lost, 0));
+        const reallyLost = Math.max(lost - unknown, 0);
+
         return (
           <div key={stage.key}>
             <div className="mb-1 flex items-baseline justify-between gap-3">
@@ -91,28 +115,46 @@ export function CampaignFunnel({ stages }: { stages: FunnelStage[] }) {
               </span>
               <span className="flex items-baseline gap-2">
                 <span className="tnum text-sm font-semibold text-ink">{count(stage.value)}</span>
-                {share !== null ? (
+                {/* A rate computed over messages nobody has heard back about
+                    is not a rate. "0%" next to four unacknowledged sends reads
+                    as total failure, which is the opposite of "we don't know". */}
+                {share !== null && unknown === 0 ? (
                   <span className="tnum text-2xs text-ink-subtle">
                     {percent(share, 0)}
                     {stage.sequential ? '' : ` of ${anchorLabel}`}
                   </span>
+                ) : unknown > 0 ? (
+                  <span className="text-2xs text-ink-subtle">not reported</span>
                 ) : null}
               </span>
             </div>
 
             {/* The track is the full width, so a short bar reads as a loss
-                rather than simply as a small number. */}
-            <div className="h-2 w-full overflow-hidden rounded-full bg-stone-100">
+                rather than simply as a small number. Where the shortfall is
+                unknown rather than lost, the unknown part is hatched: it must
+                not read as an empty bar, which means zero. */}
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-stone-100">
               <div
-                className="h-full rounded-full bg-brand-500"
+                className="h-full bg-brand-500"
                 style={{ width: `${Math.max((stage.value / top) * 100, stage.value > 0 ? 1.5 : 0)}%` }}
               />
+              {unknown > 0 ? (
+                <div
+                  className="h-full bg-[repeating-linear-gradient(135deg,#e7e5e4_0px,#e7e5e4_3px,#f5f5f4_3px,#f5f5f4_6px)]"
+                  style={{ width: `${(unknown / top) * 100}%` }}
+                />
+              ) : null}
             </div>
 
-            {lost > 0 ? (
+            {/* Never "did not get this far" for a message nobody has heard
+                back about. That sentence is a claim, and it would be false. */}
+            {unknown > 0 ? (
               <p className="mt-1 text-2xs text-ink-subtle">
-                {count(lost)} did not get this far
+                No delivery receipt yet for {count(unknown)}
+                {reallyLost > 0 ? ` · ${count(reallyLost)} did not get this far` : ''}
               </p>
+            ) : reallyLost > 0 ? (
+              <p className="mt-1 text-2xs text-ink-subtle">{count(reallyLost)} did not get this far</p>
             ) : null}
           </div>
         );

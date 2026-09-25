@@ -8,7 +8,7 @@ import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Badge, Card, CardBody, CardHeader, EmptyState, StatTile, StatusBadge } from '@/components/ui/display';
 import { CampaignFunnel, type FunnelStage } from './funnel';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
-import { count, dateTime, fullName, money, percent } from '@/lib/format';
+import { count, dateTime, fromNow, fullName, money, percent } from '@/lib/format';
 import type { Campaign, Customer, Money } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -94,7 +94,15 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               [
                 { key: 'targeted', label: 'Targeted', value: campaign.targetCount, sequential: true },
                 { key: 'sent', label: 'Sent', value: campaign.sentCount, sequential: true },
-                { key: 'delivered', label: 'Delivered', value: campaign.deliveredCount, sequential: true },
+                {
+                  key: 'delivered',
+                  label: 'Delivered',
+                  value: campaign.deliveredCount,
+                  sequential: true,
+                  // Messages the provider accepted and never reported back on.
+                  // Without this the stage claims they failed.
+                  unreported: campaign.receipts?.awaiting ?? 0,
+                },
                 campaign.channel === 'SMS'
                   ? null
                   : {
@@ -102,6 +110,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                       label: campaign.channel === 'EMAIL' ? 'Opened' : 'Read',
                       value: campaign.readCount,
                       sequential: true,
+                      unreported: campaign.receipts?.awaiting ?? 0,
                       note:
                         campaign.channel === 'EMAIL'
                           ? 'an open is not a guaranteed read'
@@ -189,6 +198,31 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           <Hourglass className="mt-px h-3.5 w-3.5 shrink-0" />
           The attribution window is still open, so bookings and visits are not final yet. They are counted once it
           closes — a zero here means &ldquo;not counted yet&rdquo;, not &ldquo;nobody came&rdquo;.
+        </p>
+      ) : null}
+
+      {/* THE DIAGNOSIS.
+          A screenful of zeros is a symptom. This says which of the two causes
+          it is, because the salon's next action is completely different for
+          each: correct the customers' numbers, or fix the webhook. */}
+      {(campaign.receipts?.awaiting ?? 0) > 0 ? (
+        <p className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+          <Hourglass className="mt-px h-4 w-4 shrink-0" />
+          <span>
+            WhatsApp accepted {count(campaign.receipts!.awaiting)} of these and has not sent a delivery receipt back, so
+            the app does not know whether they arrived.{' '}
+            {campaign.receipts?.looksUnwired ? (
+              <>
+                <strong className="font-semibold">
+                  No receipt has ever arrived for any message from this salon
+                </strong>
+                , which points at the status webhook rather than at your customers&rsquo; numbers — check that the
+                webhook URL and verify token in Meta match the ones under Settings → Messaging.
+              </>
+            ) : campaign.receipts?.lastAnywhereAt ? (
+              <>Receipts are arriving for other messages — the most recent was {fromNow(campaign.receipts.lastAnywhereAt)} — so this is more likely a delay than a fault.</>
+            ) : null}
+          </span>
         </p>
       ) : null}
 
