@@ -79,36 +79,56 @@ export function FollowUpPanel({ campaign }: { campaign: Campaign }) {
           {!anyone ? (
             <p className="text-xs text-ink-muted">Nobody has been messaged by this campaign yet.</p>
           ) : (
-            rows.map((row) => (
-              <div
-                key={row.audience}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-stone-200 p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-medium text-ink">
-                    <Users className="h-3.5 w-3.5 text-ink-subtle" />
-                    {row.label}
-                    <span className="tnum text-ink-muted">{count(row.count)}</span>
-                  </p>
-                  <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{row.meaning}</p>
-                  <p className="mt-1 text-2xs leading-relaxed text-ink-subtle">{row.suggestion}</p>
+            rows.map((row) =>
+              /**
+               * An empty group is one line, not a paragraph.
+               *
+               * Every group carried three lines of advice whether or not
+               * anybody was in it, so a campaign with four people in one group
+               * showed six explanations of what to do about nobody. Advice is
+               * worth reading when there is somebody to act on; otherwise it is
+               * the thing you scroll past to reach the number, and scrolling
+               * past is a habit that outlives the empty groups.
+               */
+              row.count === 0 ? (
+                <div
+                  key={row.audience}
+                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-1.5"
+                >
+                  <span className="text-2xs text-ink-subtle">{row.label}</span>
+                  <span className="tnum text-2xs text-ink-subtle">0</span>
                 </div>
+              ) : (
+                <div
+                  key={row.audience}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-stone-200 p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-sm font-medium text-ink">
+                      <Users className="h-3.5 w-3.5 text-ink-subtle" />
+                      {row.label}
+                      <span className="tnum text-ink-muted">{count(row.count)}</span>
+                    </p>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{row.meaning}</p>
+                    <p className="mt-1 text-2xs leading-relaxed text-ink-subtle">{row.suggestion}</p>
+                  </div>
 
-                {row.count > 0 && row.followUpSensible ? (
-                  <Button size="sm" variant="secondary" onClick={() => setChosen(row)}>
-                    <Send className="h-3.5 w-3.5" />
-                    Follow up
-                  </Button>
-                ) : row.count > 0 ? (
-                  // Named rather than an absent button, so it is a decision the
-                  // salon can see was made rather than a feature that looks broken.
-                  <span className="flex items-center gap-1 text-2xs text-ink-subtle">
-                    <Ban className="h-3 w-3" />
-                    not a follow-up
-                  </span>
-                ) : null}
-              </div>
-            ))
+                  {row.followUpSensible ? (
+                    <Button size="sm" variant="secondary" onClick={() => setChosen(row)}>
+                      <Send className="h-3.5 w-3.5" />
+                      Follow up
+                    </Button>
+                  ) : (
+                    // Named rather than an absent button, so it reads as a
+                    // decision somebody made rather than a broken feature.
+                    <span className="flex items-center gap-1 text-2xs text-ink-subtle">
+                      <Ban className="h-3 w-3" />
+                      not a follow-up
+                    </span>
+                  )}
+                </div>
+              ),
+            )
           )}
 
           <p className="flex items-start gap-1.5 pt-1 text-2xs leading-relaxed text-ink-subtle">
