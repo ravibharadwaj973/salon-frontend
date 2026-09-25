@@ -847,6 +847,10 @@ export interface Campaign {
   windowRationale?: string;
   /** True while the window is still open, so a zero means "not counted yet". */
   attributionPending?: boolean;
+  /** The campaign this one follows up, when its audience is another send's recipients. */
+  followUpOfId?: string | null;
+  /** Which outcome group it goes to — resolved afresh at send time, not frozen. */
+  followUpAudience?: string | null;
   /** What it costs to send one, so a review can total it before anybody presses send. */
   costPerMessage?: Money;
   segment: { id: string; name: string; lastCount?: number } | null;

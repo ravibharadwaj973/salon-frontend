@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Hourglass } from 'lucide-react';
+import { FollowUpPanel } from '../follow-up';
 import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Badge, Card, CardBody, CardHeader, EmptyState, StatTile, StatusBadge } from '@/components/ui/display';
 import { CampaignFunnel, type FunnelStage } from './funnel';
@@ -190,6 +191,13 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           closes — a zero here means &ldquo;not counted yet&rdquo;, not &ldquo;nobody came&rdquo;.
         </p>
       ) : null}
+
+      {/* Who did what, and a way to message part of them again. Sits above the
+          template, because after a send the question is what to do next rather
+          than what was said. */}
+      <div className="mt-5">
+        <FollowUpPanel campaign={campaign} />
+      </div>
 
       {campaign.template ? (
         <Card className="mt-5">
