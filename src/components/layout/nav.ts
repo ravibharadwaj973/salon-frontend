@@ -10,6 +10,7 @@ import {
   Heart,
   History,
   LayoutDashboard,
+  Images,
   MessageSquareHeart,
   Megaphone,
   Receipt,
@@ -92,6 +93,9 @@ export const NAV: NavGroup[] = [
       // whether they did.
       { href: '/messages', label: 'Messages', icon: Send, permissions: [P.CAMPAIGN_VIEW] },
       { href: '/feedback', label: 'Feedback', icon: MessageSquareHeart, permissions: [P.FEEDBACK_VIEW] },
+      // Beside Feedback rather than in Settings: both are what the salon's own
+      // website shows, and both are things somebody comes back to weekly.
+      { href: '/gallery', label: 'Gallery', icon: Images, permissions: [P.TENANT_MANAGE] },
     ],
   },
   {
