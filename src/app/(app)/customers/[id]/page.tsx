@@ -25,6 +25,7 @@ import { CustomerNotes } from './customer-notes';
 import { EditCustomerButton } from './edit-customer-button';
 import { ConsentEditor } from './consent-editor';
 import { MessagingCard, type CustomerMessaging } from './messaging-card';
+import { EngagementCard, type CustomerEngagement } from './engagement-card';
 import { date, dateTime, fromNow, fullName, money, phone as formatPhone, time } from '@/lib/format';
 import type {
   Appointment,
@@ -107,9 +108,13 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     shows('photos') ? apiFetchSafe<CustomerPhoto[]>(`/customers/${id}/photos`) : Promise.resolve(null),
   ]);
 
-  const messaging = shows('messaging')
-    ? await apiFetchSafe<CustomerMessaging>(`/analytics/messaging/customer/${id}`)
-    : null;
+  const [messaging, engagement] = await Promise.all([
+    shows('messaging') ? apiFetchSafe<CustomerMessaging>(`/analytics/messaging/customer/${id}`) : Promise.resolve(null),
+    // Alongside messaging rather than inside it: what was SENT to somebody and
+    // what they then did are different questions, and the second one is only
+    // ever answerable for a customer who tapped a link.
+    apiFetchSafe<CustomerEngagement>(`/customers/${id}/engagement`),
+  ]);
 
   const canManage = user?.permissions.includes('customer.manage') ?? false;
   const canSetTier = user?.role === 'OWNER' || user?.role === 'ADMIN';
@@ -575,6 +580,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
 
           {/* Messages & engagement */}
           {shows('messaging') && messaging ? <MessagingCard data={messaging} /> : null}
+
+          {engagement ? <EngagementCard data={engagement} /> : null}
 
           {customer.sections && customer.sections.length < 12 && user?.role !== 'OWNER' ? (
             <p className="flex items-start gap-1.5 px-1 text-2xs leading-relaxed text-ink-subtle">
