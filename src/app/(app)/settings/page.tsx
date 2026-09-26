@@ -16,6 +16,7 @@ import { ROLE_LABEL } from '@/lib/permissions';
 import { bookingPageUrl, embedScriptUrl } from '@/lib/public-urls';
 import type { BranchSummary, PageLayout, SessionUser, UserRole } from '@/lib/types';
 import { LogoCard } from './logo-card';
+import { WebsiteCard } from './website-card';
 
 export const metadata: Metadata = { title: 'Settings' };
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ interface Tenant {
   id: string;
   name: string;
   logoUrl: string | null;
+  websiteUrl: string | null;
   slug: string;
   legalName: string | null;
   gstin: string | null;
@@ -245,6 +247,11 @@ export default async function SettingsPage({
           tenantFallback={tenantGoogleReviewUrl}
           canEdit={canManageBranches}
           canEditFallback={user?.permissions.includes('tenant.manage') ?? false}
+        />
+
+        <WebsiteCard
+          initial={tenant?.websiteUrl ?? null}
+          canEdit={user?.permissions.includes('tenant.manage') ?? false}
         />
         </div>
       ) : null}

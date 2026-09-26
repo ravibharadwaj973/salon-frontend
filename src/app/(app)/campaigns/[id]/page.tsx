@@ -130,6 +130,17 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   value: campaign.engagedCount ?? 0,
                   note: 'read, clicked or replied',
                 },
+                // The stage between the tap and the booking. Left out
+                // entirely where the salon has no website reporting, rather
+                // than shown as a zero — see the note on `site.measured`.
+                campaign.site?.measured
+                  ? {
+                      key: 'site',
+                      label: 'Opened the website',
+                      value: campaign.site.visitors,
+                      note: 'at least — only visitors who arrived from this message are counted',
+                    }
+                  : null,
                 {
                   key: 'bookings',
                   label: 'Booked',

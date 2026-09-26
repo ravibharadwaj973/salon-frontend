@@ -865,6 +865,19 @@ export interface Campaign {
     /** No receipt has ever arrived, anywhere — the webhook, not the numbers. */
     looksUnwired: boolean;
   };
+  /**
+   * What happened on the salon's OWN website after the tap.
+   *
+   * `visitors` is a floor, never a total: it counts only people who arrived
+   * through a tracked link in this campaign's messages, on a site carrying the
+   * reporting snippet. `measured` says whether this salon has that at all, so
+   * a zero can be explained instead of read as “nobody went”.
+   */
+  site?: {
+    visitors: number;
+    events: Record<string, number>;
+    measured: boolean;
+  };
   /** What it costs to send one, so a review can total it before anybody presses send. */
   costPerMessage?: Money;
   segment: { id: string; name: string; lastCount?: number } | null;
