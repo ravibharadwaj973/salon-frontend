@@ -60,6 +60,14 @@ export default async function JourneysPage() {
                     {journey.trigger === 'NO_VISIT_DAYS' && journey.triggerConfig?.days
                       ? ` (${String(journey.triggerConfig.days)} days)`
                       : ''}
+                    {/* The stages, not a day count — this journey has none.
+                        Naming them is what tells the owner the difference
+                        between chasing at "due soon" and at "at risk". */}
+                    {journey.trigger === 'VISIT_DUE' && Array.isArray(journey.triggerConfig?.stages)
+                      ? ` (${(journey.triggerConfig.stages as string[])
+                          .map((stage) => stage.replace(/_/g, ' ').toLowerCase())
+                          .join(', ')})`
+                      : ''}
                   </p>
                 </div>
                 {canManage ? (

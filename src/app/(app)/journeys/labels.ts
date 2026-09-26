@@ -15,6 +15,10 @@ export const TRIGGER_LABEL: Record<string, string> = {
   FIRST_VISIT: 'After a customer’s first visit',
   INVOICE_PAID: 'When a bill is paid',
   NO_VISIT_DAYS: 'When a customer goes quiet',
+  // Deliberately says “their own”. The difference between this and the line
+  // above is the whole point of it, and an owner choosing between the two in a
+  // dropdown has only these words to go on.
+  VISIT_DUE: 'When a customer is due on their own cycle',
   MEMBERSHIP_EXPIRING: 'Before a membership expires',
   PACKAGE_EXPIRING: 'Before a package expires',
   BIRTHDAY: 'On a birthday',
