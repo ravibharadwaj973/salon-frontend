@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { MessageSquareHeart, Star } from 'lucide-react';
+import { Globe, MessageSquareHeart, Star } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Avatar, Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { ResolveComplaint } from './resolve-complaint';
+import { PublishToggle } from './publish-toggle';
 import { dateTime, fullName, percent } from '@/lib/format';
 import type { Feedback, SessionUser } from '@/lib/types';
 
@@ -24,19 +25,26 @@ interface Reputation {
   googleClicked: number;
   googleLinkConfigured: boolean;
   byStaff: { staffId: string | null; name: string; averageRating: number; reviews: number }[];
+  /**
+   * Counted alongside, never inside, the figures above. Feedback typed into
+   * the public form on the salon's website is unverified — anybody with the
+   * address can leave it — so folding it into the average would make the
+   * number the salon judges itself by something a stranger can move.
+   */
+  website?: { count: number; averageRating: number | null };
 }
 
 export default async function FeedbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ unresolvedOnly?: string; page?: string }>;
+  searchParams: Promise<{ unresolvedOnly?: string; source?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const page = Number(params.page ?? 1);
 
   const [{ data: feedback }, summary, user] = await Promise.all([
     apiFetchList<Feedback>('/feedback', {
-      query: { unresolvedOnly: params.unresolvedOnly, page, pageSize: 30 },
+      query: { unresolvedOnly: params.unresolvedOnly, source: params.source, page, pageSize: 30 },
     }),
     apiFetchSafe<Reputation>('/feedback/summary'),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
@@ -56,7 +64,11 @@ export default async function FeedbackPage({
         <StatTile
           label="Average rating"
           value={summary ? Number(summary.averageRating).toFixed(1) : '—'}
-          hint={`${summary?.totalReviews ?? 0} reviews`}
+          hint={
+            summary?.website?.count
+              ? `${summary.totalReviews} after visits · ${summary.website.count} from your site, not counted`
+              : `${summary?.totalReviews ?? 0} reviews`
+          }
         />
         <StatTile label="Positive (4–5★)" value={percent(summary?.positiveRatePct ?? 0, 0)} tone="positive" />
         <StatTile label="NPS" value={summary?.nps !== null && summary?.nps !== undefined ? String(summary.nps) : '—'} />
@@ -102,12 +114,49 @@ export default async function FeedbackPage({
                           <Link href={`/customers/${item.customer.id}`} className="text-sm font-medium text-ink hover:text-brand-700">
                             {fullName(item.customer)}
                           </Link>
+                        ) : item.source === 'WEBSITE' ? (
+                          /* The name they typed, presented as exactly that.
+                             Not linked to a customer, because the phone number
+                             behind it is unverified — see the note on
+                             authorName in the schema. */
+                          <span className="text-sm font-medium text-ink">{item.authorName ?? 'Anonymous'}</span>
                         ) : (
                           <span className="text-sm font-medium text-ink">Anonymous</span>
                         )}
                         <Stars rating={item.rating} />
+                        {item.source === 'WEBSITE' ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-2xs font-medium text-ink-muted">
+                            <Globe className="h-3 w-3" />
+                            from your website
+                          </span>
+                        ) : null}
                         {item.staff ? <span className="text-xs text-ink-subtle">with {item.staff.displayName}</span> : null}
                       </div>
+
+                      {/* The number they left, and who the salon already knows
+                          with that number. Shown as a possible match rather
+                          than written onto the record: anybody can type
+                          anybody's number into a public form, and a stored
+                          link would let them attach this to a named person. */}
+                      {item.source === 'WEBSITE' && item.authorPhone ? (
+                        <p className="mt-1 text-2xs text-ink-subtle">
+                          <span className="tnum text-ink-muted">{item.authorPhone}</span>
+                          {item.possibleCustomer ? (
+                            <>
+                              {' · looks like '}
+                              <Link
+                                href={`/customers/${item.possibleCustomer.id}`}
+                                className="font-medium text-brand-700 hover:underline"
+                              >
+                                {item.possibleCustomer.name}
+                              </Link>
+                              {' — unverified'}
+                            </>
+                          ) : (
+                            ' · not a number you have on file'
+                          )}
+                        </p>
+                      ) : null}
 
                       {item.comment ? (
                         <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">&ldquo;{item.comment}&rdquo;</p>
@@ -122,9 +171,17 @@ export default async function FeedbackPage({
                       ) : null}
                     </div>
 
-                    {item.isComplaint && !item.resolvedAt && canResolve ? (
-                      <ResolveComplaint feedbackId={item.id} />
-                    ) : null}
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      {item.isComplaint && !item.resolvedAt && canResolve ? (
+                        <ResolveComplaint feedbackId={item.id} />
+                      ) : null}
+                      {/* Only worth offering for something with words in it:
+                          a bare five stars with no comment has nothing to put
+                          on a page. */}
+                      {canResolve && item.comment ? (
+                        <PublishToggle feedbackId={item.id} isPublic={item.isPublic ?? false} />
+                      ) : null}
+                    </div>
                   </div>
                 </li>
               ))}

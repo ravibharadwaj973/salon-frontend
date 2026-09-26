@@ -939,6 +939,26 @@ export interface Feedback {
   customer: Pick<Customer, 'id' | 'firstName' | 'lastName' | 'phone'> | null;
   staff: { id: string; displayName: string } | null;
   appointment: { id: string; startAt: string } | null;
+  /**
+   * Left after a visit, or typed into the public form on the salon's website.
+   *
+   * Not a detail. A VISIT rating is tied to an appointment the salon performed,
+   * for a customer it knows. A WEBSITE one is tied to nothing: anybody with
+   * the address can leave it, twice, including a competitor. The screen has to
+   * be able to say which.
+   */
+  source?: 'VISIT' | 'WEBSITE';
+  /** What they typed into the public form. Who they SAID they were. */
+  authorName?: string | null;
+  authorPhone?: string | null;
+  /**
+   * The customer this might be, worked out from an unverified phone number.
+   * A suggestion for the salon to act on, never a stored link — see the note
+   * on authorName in the schema.
+   */
+  possibleCustomer?: { id: string; name: string } | null;
+  /** Showing on the salon's own website. False until a person publishes it. */
+  isPublic?: boolean;
 }
 
 export interface Expense {

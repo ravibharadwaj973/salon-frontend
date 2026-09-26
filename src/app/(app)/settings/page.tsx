@@ -17,6 +17,7 @@ import { bookingPageUrl, embedScriptUrl } from '@/lib/public-urls';
 import type { BranchSummary, PageLayout, SessionUser, UserRole } from '@/lib/types';
 import { LogoCard } from './logo-card';
 import { WebsiteCard } from './website-card';
+import { FeedbackFormCard, type FeedbackFormSettings } from './feedback-form-card';
 
 export const metadata: Metadata = { title: 'Settings' };
 export const dynamic = 'force-dynamic';
@@ -89,6 +90,24 @@ export default async function SettingsPage({
 
   const canManageUsers = user?.permissions.includes('user.manage') ?? false;
   const canManageBranches = user?.permissions.includes('branch.manage') ?? false;
+  /**
+   * The saved wording, with the app's defaults underneath.
+   *
+   * The same defaults the API applies, repeated here so the form shows what
+   * the website is actually rendering rather than empty boxes above a section
+   * that plainly has a heading. Kept in one place would be better; the API is
+   * the authority and this mirrors it — readFormConfig in
+   * website-feedback.service.ts is the original.
+   */
+  const savedForm = (tenant?.settings?.feedbackForm ?? {}) as Partial<FeedbackFormSettings>;
+  const feedbackForm: FeedbackFormSettings = {
+    enabled: savedForm.enabled === true,
+    heading: savedForm.heading ?? 'How did we do?',
+    prompt: savedForm.prompt ?? 'We read every one of these, and they go straight to the owner.',
+    phone: savedForm.phone ?? 'required',
+    showReviews: savedForm.showReviews !== false,
+  };
+
   const tenantGoogleReviewUrl =
     typeof tenant?.settings?.googleReviewUrl === 'string' ? (tenant.settings.googleReviewUrl as string) : null;
 
@@ -252,6 +271,12 @@ export default async function SettingsPage({
         <WebsiteCard
           initial={tenant?.websiteUrl ?? null}
           canEdit={user?.permissions.includes('tenant.manage') ?? false}
+        />
+
+        <FeedbackFormCard
+          initial={feedbackForm}
+          canEdit={user?.permissions.includes('tenant.manage') ?? false}
+          hasWebsite={Boolean(tenant?.websiteUrl)}
         />
         </div>
       ) : null}
