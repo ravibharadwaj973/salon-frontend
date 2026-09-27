@@ -67,9 +67,41 @@ async function forward(request: NextRequest, path: string[]): Promise<NextRespon
   const text = await response.text();
   const contentType = response.headers.get('content-type') ?? 'application/json';
 
-  const out = new NextResponse(text, {
+  /**
+   * A 204 MUST BE CONSTRUCTED WITH A NULL BODY, NOT AN EMPTY STRING.
+   *
+   * The bug this fixes, which broke every delete in the app:
+   *
+   *   `await response.text()` on a 204 gives '' — an empty string, which is
+   *   still a BODY as far as the Fetch spec is concerned. 204, 205 and 304 are
+   *   "null body statuses", and on Node 22 this is what happens:
+   *
+   *     new Response('',   { status: 204 })  → TypeError: Response
+   *                                            constructor: Invalid response
+   *                                            status code 204
+   *     new Response(null, { status: 204 })  → fine
+   *
+   * So this proxy threw, Next turned that into a 500, and the browser was told
+   * "Something went wrong. Please try again." — while the API had already done
+   * the work and returned 204 happily. A salon deleting a photograph saw an
+   * error, reloaded, and found the photograph gone, which is the worst of both:
+   * it teaches them not to trust what the app tells them.
+   *
+   * It only ever showed on 204, which is why it survived: every other endpoint
+   * returns a body, and 200 and 201 construct fine. Six endpoints return 204 —
+   * deleting a photograph, an expense, a staff member's time off, a branch
+   * resource, a holiday — and all six were failing the same way.
+   *
+   * Content-Type is dropped with the body. A 204 that announces
+   * application/json and carries nothing is a small lie to every client that
+   * reads the header before the body.
+   */
+  const NULL_BODY_STATUS = new Set([204, 205, 304]);
+  const isEmpty = NULL_BODY_STATUS.has(response.status);
+
+  const out = new NextResponse(isEmpty ? null : text, {
     status: response.status,
-    headers: { 'Content-Type': contentType },
+    ...(isEmpty ? {} : { headers: { 'Content-Type': contentType } }),
   });
 
   if (refreshed) {
