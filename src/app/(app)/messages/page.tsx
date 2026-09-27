@@ -81,12 +81,50 @@ function statusLabel(message: MessageLogEntry): string | undefined {
 }
 
 /**
+ * META'S ERROR CODES, IN WORDS THE SALON CAN ACT ON.
+ *
+ * Meta's own text is written for the developer who built the integration, and
+ * some of it is actively misleading to anybody else. A salon owner watched an
+ * invoice fail and was told, in full, "Re-engagement message" — Meta's name for
+ * code 131047. Two words, no verb, and no hint that the real problem was a
+ * template nobody had ever submitted for approval.
+ *
+ * Each of these says what happened and who can fix it. Anything not listed
+ * falls through to Meta's own wording with the code beside it, so an unknown
+ * failure is still searchable rather than swallowed.
+ */
+const PROVIDER_REASONS: Record<string, string> = {
+  '131047':
+    'WhatsApp would not let this start a conversation. A business may only message a customer first using a template Meta has approved — plain messages are allowed only within 24 hours of the customer writing to you. Check that this message’s template is approved under Templates.',
+  '131026':
+    'WhatsApp could not deliver this. Usually the number is not on WhatsApp, or it is but has never accepted WhatsApp’s terms on that phone. Worth confirming the number with the customer.',
+  '131049':
+    'Meta held this back to limit how much marketing one person receives. It is not a fault in the message; the customer had reached their limit for now. Transactional messages such as invoices and reminders are unaffected.',
+  '132000':
+    'The template was sent with the wrong number of fields — Meta expects exactly as many as the approved version has. The template was probably edited on Meta’s side after it was approved here.',
+  '132001':
+    'Meta has no approved template by this name in this language. Either it was never submitted, it is still awaiting approval, or it was rejected. Check it under Templates.',
+  '132015':
+    'Meta has paused this template for low quality, so it cannot be sent until it recovers. That usually follows customers blocking or reporting messages from this template.',
+  TEMPLATE_NOT_LIVE:
+    'Not sent, because the template is not approved by Meta yet. Nothing was spent on it and no delivery was attempted.',
+};
+
+/**
  * The last column. Each status gets the sentence a receptionist would need,
  * not the provider's wording — and where a message has climbed past delivery,
  * it says how far it got rather than repeating the badge.
  */
 function outcome(message: MessageLogEntry): { text: string; tone: string } {
-  const reason = message.errorMessage ?? message.errorCode;
+  /**
+   * A known provider code wins over the provider's own sentence, because the
+   * whole point is that its sentence was not usable. An unknown one keeps
+   * Meta's text AND shows the code, which is what makes it searchable.
+   */
+  const known = message.errorCode ? PROVIDER_REASONS[message.errorCode] : undefined;
+  const raw = message.errorMessage ?? message.errorCode;
+  const reason =
+    known ?? (message.errorMessage && message.errorCode ? `${message.errorMessage} (code ${message.errorCode})` : raw);
 
   switch (message.status) {
     case 'QUEUED':

@@ -74,10 +74,31 @@ export function FeedbackForm({
         </span>
         <p className="text-sm font-medium text-ink">{result.message}</p>
 
-        {happy && result.googleReviewUrl ? (
+        {/**
+          * The apology comes first for an unhappy customer, and the link comes
+          * after it — not instead of it.
+          *
+          * Withholding the link from the people who rated badly is review
+          * gating, which Google prohibits outright. So the difference between
+          * a good and a bad rating is what this page SAYS, never whether the
+          * customer is allowed to say it publicly.
+          */}
+        {!happy ? (
+          <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+            This has gone straight to the owner, not onto any public page. Someone will be in touch. Thank you for
+            saying something — it is the only way things improve.
+          </p>
+        ) : null}
+
+        {result.googleReviewUrl ? (
           <>
             <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-              A public review takes about thirty seconds and is how most new customers find the salon.
+              {happy
+                ? 'A public review takes about thirty seconds and is how most new customers find the salon.'
+                : /* No pleading, and no suggestion of what to write. They were
+                     asked because everybody is asked, and that is the whole
+                     reason it can be offered here at all. */
+                  'You are welcome to leave a public review as well. We ask everyone, whatever they told us.'}
             </p>
             <a
               href={result.googleReviewUrl}
@@ -96,14 +117,12 @@ export function FeedbackForm({
             </a>
             {tapped ? <p className="mt-2 text-xs text-ink-subtle">Thank you — that really does help.</p> : null}
           </>
-        ) : happy ? (
+        ) : (
+          /* No link configured for this branch yet. Says the same thing to
+             everybody, because by this point the rating is irrelevant to what
+             happens next. */
           <p className="mt-3 text-xs leading-relaxed text-ink-muted">
             If you have a moment, a public review helps other people find the salon. The team will send you a link.
-          </p>
-        ) : (
-          <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-            This has gone straight to the owner, not onto any public page. Someone will be in touch. Thank you for
-            saying something — it is the only way things improve.
           </p>
         )}
       </div>
