@@ -17,15 +17,23 @@ interface Result {
 const LABELS = ['', 'Poor', 'Not great', 'Fine', 'Good', 'Loved it'];
 
 /**
- * The split that matters: 4–5 stars are invited to post publicly, 1–3 stars are
- * routed to the owner instead. It keeps a bad day off Google and in front of
- * someone who can fix it.
+ * WHAT THE RATING CHANGES, AND WHAT IT NO LONGER CHANGES.
  *
- * Two consequences of that split show up here. An unhappy customer is never
- * shown the Google link, at any point, and is told plainly that what they write
- * is private. A happy one gets the link as a real anchor they tap themselves —
- * we record the tap on the way past rather than opening the window in code,
- * which every phone browser blocks.
+ * It changes what this page SAYS. Three stars or fewer and the extra questions
+ * appear — who did the service, how long the wait was — under a line promising
+ * the answer goes to the owner rather than anywhere public, because those are
+ * the two things a salon can act on and somebody will only type them if they
+ * believe that.
+ *
+ * It no longer changes whether the customer may review the salon publicly.
+ * That used to be the whole design: 4s and 5s were handed the Google link and
+ * everybody else was quietly steered away from it. Google prohibits exactly
+ * that — selectively soliciting positive reviews — so the link is offered to
+ * everyone now and the apology comes first for the people who need one.
+ *
+ * The link stays a real anchor the customer taps themselves. Opening a window
+ * from code is what every phone browser blocks; the tap is recorded on the way
+ * past instead.
  */
 export function FeedbackForm({
   appointmentId,
@@ -36,7 +44,14 @@ export function FeedbackForm({
 }: {
   appointmentId: string;
   customerName: string;
-  services: string[];
+  /**
+   * The services on THIS visit, with their ids.
+   *
+   * The customer is never asked to pick what they had — the appointment
+   * already knows, and a form that opens with "which services did you
+   * receive?" is asking somebody to do the salon's data entry.
+   */
+  services: { id: string; name: string }[];
   staffName: string | null;
   alreadySubmitted: boolean;
 }) {
@@ -44,6 +59,8 @@ export function FeedbackForm({
   const [hover, setHover] = useState(0);
   const [staffRating, setStaffRating] = useState(0);
   const [waitRating, setWaitRating] = useState(0);
+  /** serviceId -> stars. Absent means not answered, which is allowed. */
+  const [serviceRatings, setServiceRatings] = useState<Record<string, number>>({});
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +161,14 @@ export function FeedbackForm({
           comment: comment.trim() || undefined,
           staffRating: staffRating || undefined,
           waitRating: waitRating || undefined,
+          /**
+           * Only the ones actually answered. A zero here is "not asked about",
+           * not "nought out of five", and sending it would put a score in the
+           * service's average that nobody gave.
+           */
+          services: services
+            .filter((service) => (serviceRatings[service.id] ?? 0) > 0)
+            .map((service) => ({ serviceId: service.id, rating: serviceRatings[service.id]! })),
         }),
       );
     } catch (err) {
@@ -161,7 +186,7 @@ export function FeedbackForm({
       <h2 className="text-center text-base font-semibold text-ink">How was it, {customerName}?</h2>
       {services.length > 0 ? (
         <p className="mt-1 text-center text-xs text-ink-muted">
-          {services.join(', ')}
+          {services.map((service) => service.name).join(', ')}
           {staffName ? ` with ${staffName}` : ''}
         </p>
       ) : null}
@@ -184,6 +209,34 @@ export function FeedbackForm({
       </div>
 
       <p className="mb-4 h-4 text-center text-xs font-medium text-ink-muted">{LABELS[shown] ?? ''}</p>
+
+      {/**
+        * A ROW PER SERVICE, ONCE THEY HAVE ANSWERED THE FIRST QUESTION.
+        *
+        * Hidden until then, because five sets of stars on a page somebody just
+        * opened reads as a survey, and a survey gets closed. The visit already
+        * knows which services these are — nobody is asked to pick them.
+        *
+        * Optional, deliberately. Blocking the button until every service is
+        * rated trades a complete response for a tidy one: the overall rating is
+        * the answer that must not be lost, and two services rated out of three
+        * is still two more than the single number this form used to collect.
+        */}
+      {rating > 0 && services.length > 0 ? (
+        <div className="mb-4 space-y-3 rounded-xl border border-stone-200 p-3.5">
+          <p className="text-xs font-medium text-ink">And each one on its own?</p>
+          {services.map((service) => (
+            <MiniStars
+              key={service.id}
+              label={service.name}
+              value={serviceRatings[service.id] ?? 0}
+              onChange={(value) =>
+                setServiceRatings((current) => ({ ...current, [service.id]: value }))
+              }
+            />
+          ))}
+        </div>
+      ) : null}
 
       {unhappy ? (
         <div className="mb-4 space-y-3 rounded-xl bg-stone-50 p-3.5">

@@ -13,7 +13,7 @@ interface FeedbackContext {
   branchName: string;
   customerName: string;
   visitDate: string;
-  services: string[];
+  services: { id: string; name: string }[];
   staffName: string | null;
   alreadySubmitted: boolean;
 }
