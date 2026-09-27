@@ -18,12 +18,23 @@ export interface GalleryPhoto {
   alt: string;
   caption: string | null;
   isVisible: boolean;
+  /** The service this is work for, so the website can price it. */
+  serviceId: string | null;
+}
+
+export interface BookableService {
+  id: string;
+  name: string;
+  price: string;
+  categoryName: string | null;
 }
 
 export interface GalleryData {
   ready: boolean;
   cloudName: string | null;
   collections: { key: string; label: string }[];
+  /** Only the services a customer can actually book online. */
+  services: BookableService[];
   photos: GalleryPhoto[];
 }
 
@@ -144,7 +155,7 @@ export function PhotoManager({ data }: { data: GalleryData }) {
           )}
         </Card>
 
-        <UploadCard collections={data.collections} collection={tab} />
+        <UploadCard collections={data.collections} collection={tab} services={data.services} />
       </div>
     </>
   );
@@ -195,6 +206,11 @@ function PhotoTile({ photo, cloudName }: { photo: GalleryPhoto; cloudName: strin
       </div>
 
       <p className="mt-1.5 line-clamp-2 text-2xs leading-snug text-ink-muted">{photo.alt}</p>
+      {/* So the owner can see at a glance which photographs are priced on the
+          website and which are just pictures. */}
+      {photo.serviceId ? null : (
+        <p className="text-2xs text-ink-subtle">No service — no price shown on your site</p>
+      )}
 
       <div className="mt-1.5 flex items-center gap-1">
         <Button size="sm" variant="ghost" loading={busy} onClick={() => void toggle()} title={photo.isVisible ? 'Hide from your website' : 'Show on your website'}>
@@ -222,9 +238,11 @@ function PhotoTile({ photo, cloudName }: { photo: GalleryPhoto; cloudName: strin
 function UploadCard({
   collections,
   collection,
+  services,
 }: {
   collections: { key: string; label: string }[];
   collection: string;
+  services: BookableService[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -235,6 +253,7 @@ function UploadCard({
   const [target, setTarget] = useState(collection);
   const [alt, setAlt] = useState('');
   const [caption, setCaption] = useState('');
+  const [serviceId, setServiceId] = useState('');
   const [busy, setBusy] = useState(false);
 
   const ready = Boolean(file) && alt.trim().length >= 3;
@@ -250,6 +269,7 @@ function UploadCard({
     setPreview(null);
     setAlt('');
     setCaption('');
+    setServiceId('');
     if (input.current) input.current.value = '';
   }
 
@@ -258,7 +278,13 @@ function UploadCard({
     setBusy(true);
     try {
       const dataUrl = await shrink(file);
-      await apiPost('gallery', { collection: target, dataUrl, alt: alt.trim(), caption: caption.trim() || undefined });
+      await apiPost('gallery', {
+        collection: target,
+        dataUrl,
+        alt: alt.trim(),
+        caption: caption.trim() || undefined,
+        serviceId: serviceId || undefined,
+      });
       toast.success('Added to your website');
       reset();
       router.refresh();
@@ -323,6 +349,38 @@ function UploadCard({
               placeholder="Balayage on dark hair, shoulder length"
               onChange={(event) => setAlt(event.target.value)}
             />
+          )}
+        </Field>
+
+        {/**
+          * THE SERVICE, AND WHY IT IS WORTH THE EXTRA SECOND.
+          *
+          * Naming it puts the price and a "Book this" button under the picture on
+          * the website. Without it the photograph is just a picture, and somebody
+          * who likes it has to go and find out what it costs — which most of them
+          * will not do.
+          *
+          * Only online-bookable services are offered. Tagging a photograph with
+          * something a customer cannot book would put a button on the site that
+          * leads nowhere.
+          *
+          * The price is never copied onto the photograph: the website reads it
+          * live, so changing a price changes it everywhere at once.
+          */}
+        <Field
+          label="What service is this?"
+          hint="Optional — but it adds the price and a Book button under the photo"
+        >
+          {({ id }) => (
+            <Select id={id} value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
+              <option value="">Not a specific service</option>
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.categoryName ? `${service.categoryName} · ` : ''}
+                  {service.name} — ₹{Math.round(Number(service.price)).toLocaleString('en-IN')}
+                </option>
+              ))}
+            </Select>
           )}
         </Field>
 
