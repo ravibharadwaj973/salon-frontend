@@ -35,6 +35,22 @@ interface Pnl {
   totals: { revenue: Money; cogs: Money; commission: Money; expenses: Money; profit: Money; marginPct: number };
 }
 
+interface InterestRow {
+  key: string;
+  label: string;
+  views: number;
+  people: number;
+  customers: number;
+}
+
+interface GalleryInterest {
+  collections: InterestRow[];
+  services: InterestRow[];
+  totalPeople: number;
+  totalViews: number;
+  truncated: boolean;
+}
+
 interface Cohorts {
   cohorts: { cohort: string; size: number; periods: { monthOffset: number; retained: number; retentionPct: number }[] }[];
 }
@@ -48,7 +64,7 @@ export default async function ReportsPage({
   const from = params.from ?? dayjs().startOf('month').format('YYYY-MM-DD');
   const to = params.to ?? dayjs().format('YYYY-MM-DD');
 
-  const [economics, growth, trend, services, pnl, cohorts, insights] = await Promise.all([
+  const [economics, growth, trend, services, pnl, cohorts, insights, gallery] = await Promise.all([
     apiFetchSafe<UnitEconomics>('/analytics/unit-economics', { query: { from, to } }),
     apiFetchSafe<GrowthResponse>('/analytics/growth', { query: { from, to } }),
     apiFetchSafe<TrendRow[]>('/analytics/revenue-trend', { query: { from, to, interval: 'day' } }),
@@ -56,6 +72,7 @@ export default async function ReportsPage({
     apiFetchSafe<Pnl>('/analytics/branch-pnl', { query: { from, to } }),
     apiFetchSafe<Cohorts>('/analytics/retention', { query: { months: 6 } }),
     apiFetchSafe<{ insights: Insight[] }>('/analytics/insights'),
+    apiFetchSafe<GalleryInterest>('/analytics/gallery-interest', { query: { from, to } }),
   ]);
 
   const anything = economics || growth || trend || services;
@@ -234,6 +251,38 @@ export default async function ReportsPage({
         </CardBody>
       </Card>
 
+      {/* What the website's visitors opened */}
+      {gallery && gallery.totalViews > 0 ? (
+        <Card className="mt-5">
+          <CardHeader
+            title="What people looked at on your website"
+            subtitle={`${count(gallery.totalViews)} opened, by ${count(gallery.totalPeople)} ${
+              gallery.totalPeople === 1 ? 'person' : 'people'
+            } — the sections and services your photographs are getting opened for`}
+          />
+          <CardBody className="grid gap-6 lg:grid-cols-2">
+            <InterestTable
+              heading="Sections"
+              empty="Nobody has filtered the gallery yet."
+              rows={gallery.collections}
+            />
+            <InterestTable
+              heading="Services"
+              empty="No photograph has been opened by service yet."
+              rows={gallery.services}
+            />
+          </CardBody>
+          {gallery.truncated ? (
+            <div className="border-t border-stone-200 px-4 py-2.5">
+              <p className="text-2xs text-ink-subtle">
+                This period has more activity than one report can count. Showing the most recent 50,000 events —
+                narrow the dates for an exact figure.
+              </p>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
       {/* Insights */}
       {insights && insights.insights.length > 0 ? (
         <Card className="mt-5">
@@ -251,6 +300,48 @@ export default async function ReportsPage({
         </Card>
       ) : null}
     </>
+  );
+}
+
+/**
+ * A ranked list, with the count of PEOPLE beside the count of views.
+ *
+ * Both, deliberately. Forty views from forty people says the work is drawing
+ * a crowd; forty from three says somebody is deciding. A table with only one
+ * of those numbers invites the wrong conclusion, and it is the conclusion an
+ * owner acts on when they choose what to photograph next.
+ */
+function InterestTable({ heading, rows, empty }: { heading: string; rows: InterestRow[]; empty: string }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-ink">{heading}</p>
+      {rows.length === 0 ? (
+        <p className="rounded-lg bg-stone-50 p-3 text-xs text-ink-subtle">{empty}</p>
+      ) : (
+        <Table>
+          <THead>
+            <TR>
+              <TH>Name</TH>
+              <TH className="text-right">Opened</TH>
+              <TH className="text-right">People</TH>
+              <TH className="text-right">Named</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {rows.slice(0, 10).map((row) => (
+              <TR key={row.key}>
+                <TD className="font-medium text-ink">{row.label}</TD>
+                <TD className="text-right tabular-nums">{count(row.views)}</TD>
+                <TD className="text-right tabular-nums">{count(row.people)}</TD>
+                {/* How many the salon can put a name to — the ones who arrived
+                    from a message and can be followed up individually. */}
+                <TD className="text-right tabular-nums text-ink-muted">{count(row.customers)}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      )}
+    </div>
   );
 }
 
