@@ -4,6 +4,7 @@ import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { ServiceEditor } from './service-editor';
+import { CategoryEditor } from './category-editor';
 import { duration, money, percent } from '@/lib/format';
 import type { Service, ServiceCategory, SessionUser } from '@/lib/types';
 
@@ -18,21 +19,44 @@ export default async function ServicesPage() {
   ]);
 
   const canManage = user?.permissions.includes('service.manage') ?? false;
-  const grouped = new Map<string, Service[]>();
-  for (const service of services) {
-    const key = service.category?.name ?? 'Uncategorised';
-    grouped.set(key, [...(grouped.get(key) ?? []), service]);
-  }
+
+  /**
+   * Built from the CATEGORIES, not from the services.
+   *
+   * Grouping the services was simpler and had one bad consequence: a category
+   * with nothing in it did not exist on this page. So somebody who had just
+   * made "Bridal" saw no sign of it, and the obvious conclusion — that adding
+   * it had failed — is the wrong one. A category is a thing the salon owns
+   * whether or not it has been filled in yet.
+   *
+   * Uncategorised comes last, and only when there is something in it, because
+   * it is not a category anybody chose.
+   */
+  const uncategorised = services.filter((service) => !service.category);
+  const groups: { category: ServiceCategory | null; list: Service[] }[] = [
+    ...(categories ?? []).map((category) => ({
+      category,
+      list: services.filter((service) => service.category?.id === category.id),
+    })),
+    ...(uncategorised.length > 0 ? [{ category: null, list: uncategorised }] : []),
+  ];
 
   return (
     <>
       <PageHeader
         title="Services"
-        description={`${services.length} services across ${grouped.size} categories`}
-        action={canManage ? <ServiceEditor categories={categories ?? []} /> : null}
+        description={`${services.length} services across ${(categories ?? []).length} categories`}
+        action={
+          canManage ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <CategoryEditor />
+              <ServiceEditor categories={categories ?? []} />
+            </div>
+          ) : null
+        }
       />
 
-      {services.length === 0 ? (
+      {services.length === 0 && (categories ?? []).length === 0 ? (
         <Card>
           <EmptyState
             icon={Scissors}
@@ -42,12 +66,33 @@ export default async function ServicesPage() {
         </Card>
       ) : (
         <div className="space-y-5">
-          {[...grouped.entries()].map(([category, list]) => (
-            <Card key={category}>
-              <div className="flex items-center justify-between border-b border-stone-200 px-5 py-3">
-                <h2 className="text-sm font-semibold text-ink">{category}</h2>
-                <span className="text-xs text-ink-subtle">{list.length} services</span>
+          {groups.map(({ category, list }) => (
+            <Card key={category?.id ?? 'uncategorised'}>
+              <div className="flex items-center justify-between gap-3 border-b border-stone-200 px-5 py-3">
+                <div className="flex min-w-0 items-center gap-1">
+                  <h2 className="truncate text-sm font-semibold text-ink">
+                    {category?.name ?? 'Uncategorised'}
+                  </h2>
+                  {/* Renaming a category renames the section on the salon's
+                      own website, so the control belongs beside the name
+                      rather than on a settings screen somewhere else. */}
+                  {canManage && category ? <CategoryEditor category={category} compact /> : null}
+                  {category && !category.isActive ? (
+                    <span className="ml-1 rounded-full bg-stone-100 px-2 py-0.5 text-2xs text-ink-muted">Hidden</span>
+                  ) : null}
+                </div>
+                <span className="shrink-0 text-xs text-ink-subtle">
+                  {list.length === 1 ? '1 service' : `${list.length} services`}
+                </span>
               </div>
+              {list.length === 0 ? (
+                /* A category somebody has just made. A bare table of headers
+                   reads as a fault; a sentence reads as a next step. */
+                <p className="px-5 py-4 text-xs text-ink-muted">
+                  Nothing in here yet. Add a service and choose{' '}
+                  <span className="font-medium text-ink">{category?.name}</span> as its category.
+                </p>
+              ) : (
               <Table>
                 <THead>
                   <TR>
@@ -94,6 +139,7 @@ export default async function ServicesPage() {
                   ))}
                 </TBody>
               </Table>
+              )}
             </Card>
           ))}
         </div>
