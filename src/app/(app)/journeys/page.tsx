@@ -12,11 +12,40 @@ export const metadata: Metadata = { title: 'Journeys' };
 export const dynamic = 'force-dynamic';
 
 
-export default async function JourneysPage() {
+const CHANNELS = [
+  { key: '', label: 'All' },
+  { key: 'WHATSAPP', label: 'WhatsApp' },
+  { key: 'EMAIL', label: 'Email' },
+  { key: 'SMS', label: 'SMS' },
+] as const;
+
+/**
+ * An automation is not ON a channel — each of its STEPS is.
+ *
+ * So the filter asks whether any step sends on that channel, and a journey
+ * that texts and then emails appears under both. The counts on the chips
+ * therefore do not add up to the total, which is correct: "how many of my
+ * automations touch email" is the question being asked, not "how do they
+ * divide up".
+ */
+function usesChannel(journey: Journey, channel: string): boolean {
+  return journey.steps.some((step) => step.channel === channel);
+}
+
+export default async function JourneysPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ channel?: string }>;
+}) {
+  const params = await searchParams;
+  const channel = CHANNELS.some((c) => c.key && c.key === params.channel) ? params.channel! : '';
+
   const [{ data: journeys }, user] = await Promise.all([
     apiFetchList<Journey>('/journeys', { query: { pageSize: 50 } }),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
   ]);
+
+  const shown = channel ? journeys.filter((journey) => usesChannel(journey, channel)) : journeys;
 
   const canManage = user?.permissions.includes('journey.manage') ?? false;
   const active = journeys.filter((journey) => journey.isActive).length;
@@ -36,6 +65,38 @@ export default async function JourneysPage() {
         <StatTile label="Paused" value={String(journeys.length - active)} />
       </section>
 
+      {/**
+        * The same channel filter as Templates, and a link for the same reasons:
+        * the URL carries it, so a filtered view is shareable and survives a
+        * reload with no state to restore.
+        */}
+      {journeys.length > 0 ? (
+        <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Filter by channel">
+          {CHANNELS.map((option) => {
+            const total = option.key
+              ? journeys.filter((journey) => usesChannel(journey, option.key)).length
+              : journeys.length;
+            const active_ = channel === option.key;
+
+            return (
+              <Link
+                key={option.key || 'all'}
+                href={option.key ? `/journeys?channel=${option.key}` : '/journeys'}
+                aria-current={active_ ? 'true' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                  active_
+                    ? 'border-brand-600 bg-brand-600 text-white'
+                    : 'border-stone-300 bg-white text-ink-muted hover:border-brand-300 hover:text-ink'
+                }`}
+              >
+                {option.label}
+                <span className={active_ ? 'text-white/80' : 'text-ink-subtle'}>{total}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+
       {journeys.length === 0 ? (
         <Card>
           <EmptyState
@@ -44,9 +105,19 @@ export default async function JourneysPage() {
             description="New salons get eight ready-made journeys — booking confirmation, review request, win-back, birthday and more."
           />
         </Card>
+      ) : shown.length === 0 ? (
+        /* Filtered to a channel nothing sends on. Saying so beats a blank
+           page, which reads as broken rather than empty. */
+        <Card>
+          <EmptyState
+            icon={Workflow}
+            title={`No automation sends on ${channel === 'WHATSAPP' ? 'WhatsApp' : channel === 'SMS' ? 'SMS' : 'email'}`}
+            description="Open an automation and set one of its messages to this channel, or add a template for it first — a step with no template for its channel sends nothing."
+          />
+        </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {journeys.map((journey) => (
+          {shown.map((journey) => (
             <Card key={journey.id} className="flex flex-col">
               <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-5 py-4">
                 <div className="min-w-0">
