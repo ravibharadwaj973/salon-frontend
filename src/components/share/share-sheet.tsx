@@ -26,6 +26,8 @@ interface SharePreview {
   subject: string | null;
   templateName: string | null;
   unresolved: string[];
+  /** Why the app could not fill one in, for the ones it was meant to. */
+  unresolvedReasons?: Record<string, string>;
   consent: { allowed: boolean; status: string; reason: string | null };
   delivery: { live: boolean; source: string; reason: string | null; simulated?: boolean };
   quota: { meter: string | null; available: number | null };
@@ -376,10 +378,16 @@ export function ShareSheet({
                 <Field
                   key={name}
                   label={isUnmapped(name) ? `Unmatched placeholder (${name})` : humanise(name)}
+                  /**
+                   * The reason the app could not fill it, when it was supposed
+                   * to. Without this the box says only that a value is missing
+                   * — true, and no help at all to somebody who reasonably
+                   * expected the app to work it out.
+                   */
                   hint={
                     isUnmapped(name)
                       ? 'Imported from Meta and never matched to a field — fix it on the template to stop being asked every time'
-                      : undefined
+                      : preview.unresolvedReasons?.[name]
                   }
                 >
                   {({ id }) => (
