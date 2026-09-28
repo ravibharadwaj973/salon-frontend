@@ -299,6 +299,13 @@ export function PosTerminal({
     ]);
 
   // ------------------------------------------------------------- submit ---
+  /**
+   * Service lines with nobody against them. Products are excluded on purpose:
+   * commission here is earned on services, and a bottle of shampoo has no
+   * performer to name.
+   */
+  const unassigned = lines.filter((line) => line.itemType === 'SERVICE' && !line.staffId).length;
+
   async function submit() {
     setError(null);
     if (lines.length === 0) {
@@ -939,6 +946,30 @@ export function PosTerminal({
             </div>
 
             <Input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Note on the bill (optional)" />
+
+            {/**
+              * NOBODY ATTACHED TO A SERVICE MEANS NOBODY EARNS ON IT.
+              *
+              * The staff box on each service line is optional, and it is the
+              * easiest thing on this screen to skip at a busy counter. What it
+              * costs is invisible until payday: no staffId, no commission
+              * entry, and the stylist's total is quietly short with no record
+              * of which bill it was.
+              *
+              * Said here rather than enforced. A salon that pays salary only
+              * has no reason to fill it in, and a till that refuses to take
+              * money over a reporting field is a till that gets worked around.
+              */}
+            {unassigned > 0 ? (
+              <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 p-2.5 text-2xs leading-relaxed text-amber-900">
+                <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                <span>
+                  {unassigned === 1 ? 'One service has' : `${unassigned} services have`} nobody assigned, so no
+                  commission will be recorded for {unassigned === 1 ? 'it' : 'them'}. Pick who performed{' '}
+                  {unassigned === 1 ? 'it' : 'each'} above, or carry on if you do not pay commission.
+                </span>
+              </p>
+            ) : null}
 
             {error ? <p className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">{error}</p> : null}
 
