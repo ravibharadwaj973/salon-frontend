@@ -22,6 +22,17 @@ interface Result {
    * is what it did before any of this existed.
    */
   reviewDraft: string | null;
+  /**
+   * The suggestions to choose between.
+   *
+   * A list rather than one sentence, because one is a thing to accept or
+   * reject — and somebody else's words about your own afternoon mostly get
+   * rejected. Choosing from five makes the chosen one theirs.
+   *
+   * Empty when there was nothing specific behind the rating, or the model did
+   * not answer in time. The screen then shows the Google link on its own.
+   */
+  reviewDrafts?: string[] | null;
 }
 
 const LABELS = ['', 'Poor', 'Not great', 'Fine', 'Good', 'Loved it'];
@@ -76,7 +87,8 @@ export function FeedbackForm({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [tapped, setTapped] = useState(false);
-  const [copied, setCopied] = useState(false);
+  /** Which suggestion they copied, so the tick sits on that one. */
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   if (alreadySubmitted && !result) {
     return (
@@ -90,6 +102,15 @@ export function FeedbackForm({
 
   if (result) {
     const happy = result.nextStep === 'GOOGLE_REVIEW';
+    /**
+     * The list, falling back to the single draft.
+     *
+     * An API that predates reviewDrafts still sends reviewDraft, and a page
+     * that showed nothing in that case would look broken during the minutes
+     * between the two deploys.
+     */
+    const suggestions =
+      result.reviewDrafts?.length ? result.reviewDrafts : result.reviewDraft ? [result.reviewDraft] : [];
     return (
       <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
         <span
@@ -130,30 +151,64 @@ export function FeedbackForm({
           * open. Reversed, they land on a blank Google form having left the
           * draft behind on a tab they have closed.
           */}
-        {result.reviewDraft ? (
-          <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-3 text-left">
+        {suggestions.length > 0 ? (
+          <div className="mt-4 text-left">
             {/* Two labels, because there are two cases and one of them would be
-                a lie. "Your words, tidied up" over a draft built from stars is
+                a lie. "Your words" over a suggestion built from stars is
                 claiming they wrote something they did not. */}
             <p className="text-2xs font-medium uppercase tracking-wide text-ink-subtle">
-              {comment.trim() ? 'Your words, tidied up' : 'What you told us, in words'}
+              {comment.trim() ? 'Your words, tidied up — pick one' : 'Pick the one that sounds like you'}
             </p>
-            <p className="mt-1.5 text-xs leading-relaxed text-ink">{result.reviewDraft}</p>
-            <button
-              type="button"
-              onClick={() => {
-                // Fire and forget: a clipboard a browser refuses is not worth
-                // an error message on a thank-you screen.
-                void navigator.clipboard?.writeText(result.reviewDraft ?? '').catch(() => {});
-                setCopied(true);
-              }}
-              className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-ink hover:border-brand-300"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied — paste it on Google' : 'Copy this'}
-            </button>
+
+            {/**
+              * ONE TAP COPIES. NOT SELECT-THEN-COPY.
+              *
+              * This is read on a phone, standing at a counter, in the fifteen
+              * seconds before somebody decides it is not worth it. A radio
+              * button and a separate Copy button is two taps and a decision
+              * about which control does what; tapping the words you want is
+              * neither. The tick and the changed border are the whole
+              * confirmation, and re-tapping another one simply copies that
+              * instead.
+              */}
+            <ul className="mt-2 space-y-2">
+              {suggestions.map((suggestion, index) => {
+                const chosen = copiedIndex === index;
+                return (
+                  <li key={index}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Fire and forget: a clipboard a browser refuses is not
+                        // worth an error message on a thank-you screen.
+                        void navigator.clipboard?.writeText(suggestion).catch(() => {});
+                        setCopiedIndex(index);
+                      }}
+                      className={cn(
+                        'flex w-full items-start gap-2 rounded-xl border p-3 text-left transition-colors',
+                        chosen
+                          ? 'border-emerald-300 bg-emerald-50'
+                          : 'border-stone-200 bg-stone-50 hover:border-brand-300',
+                      )}
+                    >
+                      <span className="mt-0.5 shrink-0">
+                        {chosen ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5 text-ink-subtle" />
+                        )}
+                      </span>
+                      <span className="text-xs leading-relaxed text-ink">{suggestion}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
             <p className="mt-2 text-2xs leading-relaxed text-ink-subtle">
-              Built from what you rated. Change any of it once you are there — it is your review.
+              {copiedIndex === null
+                ? 'Tap one to copy it. Built from what you rated — change any of it once you are there.'
+                : 'Copied. Paste it on Google and edit it however you like — it is your review.'}
             </p>
           </div>
         ) : null}
