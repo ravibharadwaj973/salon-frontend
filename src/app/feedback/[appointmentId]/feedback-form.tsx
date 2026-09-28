@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Heart, Lock, Star } from 'lucide-react';
+import { Check, Copy, Heart, Lock, Star } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,15 @@ interface Result {
   nextStep: 'GOOGLE_REVIEW' | 'APOLOGY';
   googleReviewUrl: string | null;
   message: string;
+  /**
+   * The customer's OWN words, tidied into something postable.
+   *
+   * Null when they wrote nothing, which is most of the time — and that is the
+   * correct outcome rather than a gap to fill. A review assembled from a star
+   * rating and a service name would be the salon's words in the customer's
+   * mouth.
+   */
+  reviewDraft: string | null;
 }
 
 const LABELS = ['', 'Poor', 'Not great', 'Fine', 'Good', 'Loved it'];
@@ -66,6 +75,7 @@ export function FeedbackForm({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [tapped, setTapped] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   if (alreadySubmitted && !result) {
     return (
@@ -105,6 +115,43 @@ export function FeedbackForm({
             This has gone straight to the owner, not onto any public page. Someone will be in touch. Thank you for
             saying something — it is the only way things improve.
           </p>
+        ) : null}
+
+        {/**
+          * THEIR REVIEW, IN THEIR WORDS, READY TO PASTE.
+          *
+          * Google's box is empty and most people close it rather than compose
+          * something — so the thing they already typed here is offered back to
+          * them, tidied. It is editable at the other end and theirs to
+          * discard; nothing posts it for them, and nothing can.
+          *
+          * Deliberately shown ABOVE the button, so the sequence is copy, then
+          * open. Reversed, they land on a blank Google form having left the
+          * draft behind on a tab they have closed.
+          */}
+        {result.reviewDraft ? (
+          <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-3 text-left">
+            <p className="text-2xs font-medium uppercase tracking-wide text-ink-subtle">
+              Your words, tidied up
+            </p>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink">{result.reviewDraft}</p>
+            <button
+              type="button"
+              onClick={() => {
+                // Fire and forget: a clipboard a browser refuses is not worth
+                // an error message on a thank-you screen.
+                void navigator.clipboard?.writeText(result.reviewDraft ?? '').catch(() => {});
+                setCopied(true);
+              }}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-ink hover:border-brand-300"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied — paste it on Google' : 'Copy this'}
+            </button>
+            <p className="mt-2 text-2xs leading-relaxed text-ink-subtle">
+              Edit it however you like once you are there. It is your review.
+            </p>
+          </div>
         ) : null}
 
         {result.googleReviewUrl ? (
