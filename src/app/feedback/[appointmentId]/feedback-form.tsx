@@ -13,12 +13,13 @@ interface Result {
   googleReviewUrl: string | null;
   message: string;
   /**
-   * The customer's OWN words, tidied into something postable.
+   * What the customer just told us, in sentences they could post.
    *
-   * Null when they wrote nothing, which is most of the time — and that is the
-   * correct outcome rather than a gap to fill. A review assembled from a star
-   * rating and a service name would be the salon's words in the customer's
-   * mouth.
+   * Built from their comment when they wrote one, and otherwise from what they
+   * scored — this service, the wait, the person who served them. Null when
+   * there was nothing specific behind the overall rating, or when the model
+   * did not answer in time; the screen then shows the link on its own, which
+   * is what it did before any of this existed.
    */
   reviewDraft: string | null;
 }
@@ -131,8 +132,11 @@ export function FeedbackForm({
           */}
         {result.reviewDraft ? (
           <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-3 text-left">
+            {/* Two labels, because there are two cases and one of them would be
+                a lie. "Your words, tidied up" over a draft built from stars is
+                claiming they wrote something they did not. */}
             <p className="text-2xs font-medium uppercase tracking-wide text-ink-subtle">
-              Your words, tidied up
+              {comment.trim() ? 'Your words, tidied up' : 'What you told us, in words'}
             </p>
             <p className="mt-1.5 text-xs leading-relaxed text-ink">{result.reviewDraft}</p>
             <button
@@ -149,7 +153,7 @@ export function FeedbackForm({
               {copied ? 'Copied — paste it on Google' : 'Copy this'}
             </button>
             <p className="mt-2 text-2xs leading-relaxed text-ink-subtle">
-              Edit it however you like once you are there. It is your review.
+              Built from what you rated. Change any of it once you are there — it is your review.
             </p>
           </div>
         ) : null}
@@ -285,15 +289,32 @@ export function FeedbackForm({
         </div>
       ) : null}
 
-      {unhappy ? (
+      {/**
+        * ASKED OF EVERYBODY NOW, NOT ONLY THE UNHAPPY.
+        *
+        * These two used to appear only below three stars, on the reasoning that
+        * they were diagnostic — things to ask when something had gone wrong.
+        * Two things were wrong with that. The salon never learned what a good
+        * visit looked like, only what a bad one did, so "waiting time" could
+        * never be compared across the two. And the review the next screen
+        * offers is written from what was scored: a happy customer who was only
+        * ever asked one question has nothing specific in it to say.
+        *
+        * The private-answer promise stays with the unhappy path, below, where
+        * it belongs — it is the comment box that needs it, not a row of stars.
+        */}
+      {rating > 0 ? (
         <div className="mb-4 space-y-3 rounded-xl bg-stone-50 p-3.5">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-ink">
-            <Lock className="h-3 w-3 text-ink-muted" />
-            This stays between you and the owner
-          </p>
           <MiniStars label="The person who did your service" value={staffRating} onChange={setStaffRating} />
           <MiniStars label="How long you waited" value={waitRating} onChange={setWaitRating} />
         </div>
+      ) : null}
+
+      {unhappy ? (
+        <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-ink">
+          <Lock className="h-3 w-3 text-ink-muted" />
+          This stays between you and the owner
+        </p>
       ) : null}
 
       {rating > 0 ? (
