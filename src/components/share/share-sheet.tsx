@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
+import { date, time } from '@/lib/format';
 import type { Channel, MessageTemplate } from '@/lib/types';
 
 export interface ShareTarget {
@@ -55,11 +56,11 @@ const isTimeVariable = (name: string) => /time/.test(name);
 const isUnmapped = (name: string) => /^unmapped_\d+$/.test(name);
 
 function today(): string {
-  return new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return date(new Date(), 'D MMM YYYY');
 }
 
 function now(): string {
-  return new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return time(new Date());
 }
 
 /**

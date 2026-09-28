@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input } from '@/components/ui/form';
-import { dayjs, duration, money, time } from '@/lib/format';
+import { date as formatDate, dayjs, duration, money, time, today } from '@/lib/format';
 import type { Service, SlotGroup } from '@/lib/types';
 
 interface Branch {
@@ -74,7 +74,7 @@ export function BookingFlow({
     return menu.some((group) => group.services.some((service) => service.id === wanted)) ? [wanted] : [];
   });
   const [staffId, setStaffId] = useState<string>('');
-  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [date, setDate] = useState(today());
   const [slot, setSlot] = useState<string | null>(null);
   const [details, setDetails] = useState({ name: '', phone: '', email: '', notes: '', consent: true });
   const [saving, setSaving] = useState(false);
@@ -209,7 +209,7 @@ export function BookingFlow({
         </span>
         <h2 className="text-lg font-semibold text-ink">You&apos;re booked, {confirmation.customer.firstName}</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          {dayjs(confirmation.startAt).format('dddd, DD MMMM')} at {time(confirmation.startAt)}
+          {formatDate(confirmation.startAt, 'dddd, DD MMMM')} at {time(confirmation.startAt)}
         </p>
 
         <div className="mt-5 space-y-2 rounded-xl bg-stone-50 p-4 text-left">
@@ -544,7 +544,7 @@ export function BookingFlow({
               </ul>
               <div className="mt-2 flex justify-between border-t border-stone-200 pt-2 text-sm">
                 <span className="font-medium text-ink">
-                  {slot ? `${dayjs(slot).format('ddd DD MMM')}, ${time(slot)}` : 'Time not chosen'}
+                  {slot ? `${formatDate(slot, 'ddd DD MMM')}, ${time(slot)}` : 'Time not chosen'}
                 </span>
                 <span className="tnum font-semibold text-ink">{money(totalPrice)}</span>
               </div>

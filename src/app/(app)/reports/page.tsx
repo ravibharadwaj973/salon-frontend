@@ -5,7 +5,7 @@ import { apiFetchSafe } from '@/lib/api';
 import { Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { BranchPnl, RetentionGrid, RevenueTrend, ServiceRevenue } from './report-charts';
-import { count, date, dayjs, money, percent } from '@/lib/format';
+import { count, date, dayjs, daysAgo, money, monthStart, percent, today } from '@/lib/format';
 import type { GrowthResponse, Insight, Money, ServicePerformanceRow, UnitEconomics } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Reports' };
@@ -61,8 +61,8 @@ export default async function ReportsPage({
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const from = params.from ?? dayjs().startOf('month').format('YYYY-MM-DD');
-  const to = params.to ?? dayjs().format('YYYY-MM-DD');
+  const from = params.from ?? monthStart();
+  const to = params.to ?? today();
 
   const [economics, growth, trend, services, pnl, cohorts, insights, gallery] = await Promise.all([
     apiFetchSafe<UnitEconomics>('/analytics/unit-economics', { query: { from, to } }),
@@ -103,13 +103,13 @@ export default async function ReportsPage({
         </button>
         <div className="ml-auto flex gap-1.5">
           {[
-            { label: 'This month', from: dayjs().startOf('month').format('YYYY-MM-DD') },
-            { label: 'Last 30 days', from: dayjs().subtract(30, 'day').format('YYYY-MM-DD') },
-            { label: 'Last 90 days', from: dayjs().subtract(90, 'day').format('YYYY-MM-DD') },
+            { label: 'This month', from: monthStart() },
+            { label: 'Last 30 days', from: daysAgo(30) },
+            { label: 'Last 90 days', from: daysAgo(90) },
           ].map((preset) => (
             <a
               key={preset.label}
-              href={`/reports?from=${preset.from}&to=${dayjs().format('YYYY-MM-DD')}`}
+              href={`/reports?from=${preset.from}&to=${today()}`}
               className="rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-ink-muted hover:text-ink"
             >
               {preset.label}

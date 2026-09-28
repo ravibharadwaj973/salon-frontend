@@ -5,19 +5,19 @@ import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Avatar, Badge, Card, CardHeader, EmptyState, PageHeader } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { AddStaffButton } from './staff-form';
-import { dayjs, money, percent } from '@/lib/format';
+import { dayjs, money, monthStart, percent, today } from '@/lib/format';
 import type { BranchSummary, Service, SessionUser, Staff, StaffLeaderboardRow } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Staff' };
 export const dynamic = 'force-dynamic';
 
 export default async function StaffPage() {
-  const monthStart = dayjs().startOf('month').format('YYYY-MM-DD');
-  const today = dayjs().format('YYYY-MM-DD');
+  const from = monthStart();
+  const to = today();
 
   const [{ data: staff }, leaderboard, user, branches, services] = await Promise.all([
     apiFetchList<Staff>('/staff', { query: { pageSize: 100, isActive: 'true' } }),
-    apiFetchSafe<StaffLeaderboardRow[]>('/staff/leaderboard', { query: { from: monthStart, to: today, limit: 10 } }),
+    apiFetchSafe<StaffLeaderboardRow[]>('/staff/leaderboard', { query: { from, to, limit: 10 } }),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
     apiFetchList<BranchSummary>('/branches', { query: { pageSize: 50, isActive: 'true' } }).catch(() => null),
     apiFetchList<Service>('/services', { query: { pageSize: 200, isActive: 'true' } }).catch(() => null),

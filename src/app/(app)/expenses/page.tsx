@@ -4,7 +4,7 @@ import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { ExpenseEditor } from './expense-editor';
-import { date, dayjs, money, percent } from '@/lib/format';
+import { date, dayjs, money, monthStart, percent, today } from '@/lib/format';
 import type { Expense, Money, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Expenses' };
@@ -29,8 +29,8 @@ export default async function ExpensesPage({
   searchParams: Promise<{ from?: string; to?: string; page?: string; categoryId?: string }>;
 }) {
   const params = await searchParams;
-  const from = params.from ?? dayjs().startOf('month').format('YYYY-MM-DD');
-  const to = params.to ?? dayjs().format('YYYY-MM-DD');
+  const from = params.from ?? monthStart();
+  const to = params.to ?? today();
   const page = Number(params.page ?? 1);
 
   const [{ data: expenses, meta }, summary, categories, user] = await Promise.all([

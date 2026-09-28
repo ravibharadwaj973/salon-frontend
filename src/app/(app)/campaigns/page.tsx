@@ -6,7 +6,7 @@ import { Card, CardHeader, EmptyState, PageHeader, StatTile, StatusBadge } from 
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { CampaignComposer } from './campaign-composer';
 import { PlanGate, PlanGateList } from '@/components/plan-gate';
-import { count, date, dayjs, money, percent } from '@/lib/format';
+import { count, date, dayjs, daysAgo, money, percent, today } from '@/lib/format';
 import type { Campaign, MessageTemplate, Money, Segment, SessionUser } from '@/lib/types';
 import { SendAgain } from './send-again';
 
@@ -36,8 +36,8 @@ export default async function CampaignsPage({
   searchParams: Promise<{ segmentId?: string }>;
 }) {
   const params = await searchParams;
-  const from = dayjs().subtract(90, 'day').format('YYYY-MM-DD');
-  const to = dayjs().format('YYYY-MM-DD');
+  const from = daysAgo(90);
+  const to = today();
 
   // The plan is checked before the fetch, because the API answers 402 for a
   // salon without marketing and an unexplained error is a worse answer than a

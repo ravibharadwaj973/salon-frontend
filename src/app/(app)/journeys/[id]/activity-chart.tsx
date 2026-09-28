@@ -1,7 +1,7 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { count, dayjs } from '@/lib/format';
+import { count, date, dayjs } from '@/lib/format';
 
 /**
  * HOW OFTEN THIS AUTOMATION FIRES.
@@ -80,8 +80,8 @@ export function ActivityChart({ data }: { data: ActivityPoint[] }) {
   }
 
   const rows = data.map((point) => ({
-    date: dayjs(point.date).format('DD MMM'),
-    fullDate: dayjs(point.date).format('dddd, DD MMM YYYY'),
+    date: date(point.date, 'DD MMM'),
+    fullDate: date(point.date, 'dddd, DD MMM YYYY'),
     Runs: point.runs,
   }));
 

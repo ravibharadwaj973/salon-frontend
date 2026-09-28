@@ -5,7 +5,7 @@ import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Card, CardHeader, EmptyState, PageHeader, StatTile, StatusBadge } from '@/components/ui/display';
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { LeadActions, NewLeadButton } from './lead-actions';
-import { date, dayjs, fromNow, money, percent, phone as formatPhone } from '@/lib/format';
+import { date, dayjs, daysAgo, fromNow, money, percent, phone as formatPhone, today } from '@/lib/format';
 import type { Lead, Money, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Leads' };
@@ -33,14 +33,14 @@ export default async function LeadsPage({
 }) {
   const params = await searchParams;
   const page = Number(params.page ?? 1);
-  const monthStart = dayjs().subtract(90, 'day').format('YYYY-MM-DD');
-  const today = dayjs().format('YYYY-MM-DD');
+  const from = daysAgo(90);
+  const to = today();
 
   const [{ data: leads, meta }, funnel, user] = await Promise.all([
     apiFetchList<Lead>('/leads', {
       query: { status: params.status, source: params.source, dueOnly: params.dueOnly, page, pageSize: 25 },
     }),
-    apiFetchSafe<Funnel>('/leads/funnel', { query: { from: monthStart, to: today } }),
+    apiFetchSafe<Funnel>('/leads/funnel', { query: { from, to } }),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
   ]);
 

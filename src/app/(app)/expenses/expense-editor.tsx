@@ -7,7 +7,7 @@ import { apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
-import { dayjs } from '@/lib/format';
+import { dayjs, today } from '@/lib/format';
 
 const MODES = ['CASH', 'UPI', 'BANK_TRANSFER', 'CARD', 'CHEQUE'] as const;
 
@@ -20,7 +20,7 @@ export function ExpenseEditor({ categories }: { categories: { id: string; name: 
 
   const [form, setForm] = useState({
     categoryId: categories[0]?.id ?? '',
-    expenseDate: dayjs().format('YYYY-MM-DD'),
+    expenseDate: today(),
     amount: 0,
     paymentMode: 'CASH' as (typeof MODES)[number],
     vendor: '',

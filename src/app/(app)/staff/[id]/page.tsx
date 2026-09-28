@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, CalendarClock, Clock, Sparkles, Star, Wallet } from 'lucide-react';
 import { ApiError, apiFetch, apiFetchAllowed, apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Avatar, Badge, Card, CardBody, CardHeader, StatTile, StatusBadge } from '@/components/ui/display';
-import { date, dayjs, money, percent, phone as formatPhone, time } from '@/lib/format';
+import { date, dayjs, money, monthStart, percent, phone as formatPhone, time, today } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/permissions';
 import { EditStaffButton } from '../staff-form';
 import type {
@@ -67,8 +67,8 @@ export default async function StaffMemberPage({
   const { id } = await params;
   const query = await searchParams;
 
-  const from = query.from ?? dayjs().startOf('month').format('YYYY-MM-DD');
-  const to = query.to ?? dayjs().format('YYYY-MM-DD');
+  const from = query.from ?? monthStart();
+  const to = query.to ?? today();
 
   let staff: Staff | null;
   try {

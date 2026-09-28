@@ -8,7 +8,7 @@ import { cn } from '@/lib/cn';
 import { apiGet } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Card, EmptyState } from '@/components/ui/display';
-import { dayjs, duration, fullName, time } from '@/lib/format';
+import { dayjs, duration, fullName, time, today } from '@/lib/format';
 import { BookingModal } from './booking-modal';
 import { AppointmentDrawer } from './appointment-drawer';
 import type { CalendarColumn, CalendarResponse, Service, Staff } from '@/lib/types';
@@ -83,7 +83,7 @@ export function CalendarBoard({
     return list;
   }, [open, close]);
 
-  const isToday = date === dayjs().format('YYYY-MM-DD');
+  const isToday = date === today();
   const nowOffset = isToday ? (dayjs().hour() * 60 + dayjs().minute() - open) * PX_PER_MIN : null;
 
   const go = (nextDate: string) => router.push(`/calendar?date=${nextDate}&groupBy=${groupBy}`);
@@ -117,7 +117,7 @@ export function CalendarBoard({
           </button>
         </div>
 
-        <Button variant="secondary" size="sm" onClick={() => go(dayjs().format('YYYY-MM-DD'))}>
+        <Button variant="secondary" size="sm" onClick={() => go(today())}>
           Today
         </Button>
 

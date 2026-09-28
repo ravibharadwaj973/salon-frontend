@@ -4,7 +4,7 @@ import { ArrowLeft, Info, MessageSquare, PiggyBank } from 'lucide-react';
 import { apiFetchSafe } from '@/lib/api';
 import { Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
-import { count, date, dayjs, money, percent } from '@/lib/format';
+import { count, date, dayjs, daysAgo, money, percent, today } from '@/lib/format';
 import type { Money } from '@/lib/types';
 import { Funnel, OutcomeTrend, RateBar, type TrendPoint } from './message-charts';
 
@@ -80,8 +80,8 @@ export default async function MessageReportPage({
   searchParams: Promise<{ from?: string; to?: string; channel?: string; purpose?: string }>;
 }) {
   const params = await searchParams;
-  const from = params.from ?? dayjs().subtract(30, 'day').format('YYYY-MM-DD');
-  const to = params.to ?? dayjs().format('YYYY-MM-DD');
+  const from = params.from ?? daysAgo(30);
+  const to = params.to ?? today();
   const channel = params.channel && params.channel !== 'all' ? params.channel : undefined;
   const purpose = params.purpose && params.purpose !== 'all' ? params.purpose : undefined;
 
@@ -164,7 +164,7 @@ export default async function MessageReportPage({
           {PRESETS.map((preset) => (
             <a
               key={preset.label}
-              href={`/reports/messages?from=${dayjs().subtract(preset.days, 'day').format('YYYY-MM-DD')}&to=${dayjs().format('YYYY-MM-DD')}${channel ? `&channel=${channel}` : ''}${purpose ? `&purpose=${purpose}` : ''}`}
+              href={`/reports/messages?from=${daysAgo(preset.days)}&to=${today()}${channel ? `&channel=${channel}` : ''}${purpose ? `&purpose=${purpose}` : ''}`}
               className="rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-ink-muted hover:text-ink"
             >
               {preset.label}
