@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { MessageSquare, ShieldCheck } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/display';
@@ -12,11 +13,35 @@ import type { MessageTemplate, SessionUser } from '@/lib/types';
 export const metadata: Metadata = { title: 'Message templates' };
 export const dynamic = 'force-dynamic';
 
-export default async function TemplatesPage() {
+const CHANNELS = [
+  { key: '', label: 'All' },
+  { key: 'WHATSAPP', label: 'WhatsApp' },
+  { key: 'EMAIL', label: 'Email' },
+  { key: 'SMS', label: 'SMS' },
+] as const;
+
+export default async function TemplatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ channel?: string }>;
+}) {
+  const params = await searchParams;
+  const channel = CHANNELS.some((c) => c.key && c.key === params.channel) ? params.channel! : '';
+
   const [{ data: templates }, user] = await Promise.all([
     apiFetchList<MessageTemplate>('/templates', { query: { pageSize: 100 } }),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
   ]);
+
+  /**
+   * The filter applies to the LIST, never to the warnings.
+   *
+   * Counting the banners off the filtered set would hide the WhatsApp
+   * approval warning the moment somebody looked at their email templates —
+   * which is exactly backwards, since a template nobody can send is worth
+   * knowing about from wherever you happen to be standing.
+   */
+  const shown = channel ? templates.filter((template) => template.channel === channel) : templates;
 
   const canManage = user?.permissions.includes('template.manage') ?? false;
 
@@ -36,8 +61,8 @@ export default async function TemplatesPage() {
   const unapproved = templates.filter(
     (template) => template.channel === 'WHATSAPP' && template.approvalStatus !== 'APPROVED',
   );
-  const utility = templates.filter((template) => template.category !== 'MARKETING');
-  const marketing = templates.filter((template) => template.category === 'MARKETING');
+  const utility = shown.filter((template) => template.category !== 'MARKETING');
+  const marketing = shown.filter((template) => template.category === 'MARKETING');
 
   return (
     <>
@@ -89,12 +114,63 @@ export default async function TemplatesPage() {
         </p>
       </div>
 
+      {/**
+        * A channel filter, as a link rather than a control.
+        *
+        * The URL carries it, so a filtered view can be sent to somebody —
+        * "your SMS templates are here" is a link, not an instruction — and it
+        * survives the back button and a page reload without any state to
+        * restore. Same pattern as Messages and Reports.
+        *
+        * The count sits on the chip because it answers the question the filter
+        * is usually asked in service of: how many do I have on this channel,
+        * and is one of them at zero.
+        */}
+      {templates.length > 0 ? (
+        <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Filter by channel">
+          {CHANNELS.map((option) => {
+            const count = option.key
+              ? templates.filter((template) => template.channel === option.key).length
+              : templates.length;
+            const active = channel === option.key;
+
+            return (
+              <Link
+                key={option.key || 'all'}
+                href={option.key ? `/templates?channel=${option.key}` : '/templates'}
+                /* aria-current rather than colour alone: which filter is on has
+                   to reach somebody who cannot see the fill. */
+                aria-current={active ? 'true' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? 'border-brand-600 bg-brand-600 text-white'
+                    : 'border-stone-300 bg-white text-ink-muted hover:border-brand-300 hover:text-ink'
+                }`}
+              >
+                {option.label}
+                <span className={active ? 'text-white/80' : 'text-ink-subtle'}>{count}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+
       {templates.length === 0 ? (
         <Card>
           <EmptyState
             icon={MessageSquare}
             title="No templates yet"
             description="New salons start with fifteen ready-written templates covering the whole customer journey."
+          />
+        </Card>
+      ) : shown.length === 0 ? (
+        /* Filtered to a channel that has none. Without this the page goes
+           blank, which reads as a broken screen rather than an empty one. */
+        <Card>
+          <EmptyState
+            icon={MessageSquare}
+            title={`No ${channel === 'WHATSAPP' ? 'WhatsApp' : channel === 'SMS' ? 'SMS' : 'email'} templates yet`}
+            description="Nothing can be sent on this channel until there is one. “Add starters” fills the gap with ready-written templates and leaves everything else untouched."
           />
         </Card>
       ) : (
