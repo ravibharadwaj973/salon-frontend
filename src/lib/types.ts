@@ -1281,6 +1281,11 @@ export interface ChannelDelivery {
 }
 
 export interface MessagingSetup {
+  /**
+   * The assistant's default for conversations that start from now on. Each
+   * conversation then carries its own mode, so this is not a master switch.
+   */
+  assistant?: { repliesToNewConversations: boolean };
   whatsapp: {
     delivery: ChannelDelivery;
     status: SetupStatus;

@@ -6,7 +6,23 @@ export interface ReplyWindow {
   minutesLeft: number;
 }
 
-export type Speaker = 'CUSTOMER' | 'AI' | 'HUMAN' | 'SYSTEM';
+/**
+ * EVENT is not a speaker. It is the assistant having DONE something — read the
+ * diary, booked, been handed over — and nothing was sent to anybody, so it must
+ * never be drawn as a message the customer could have seen.
+ */
+export type Speaker = 'CUSTOMER' | 'AI' | 'HUMAN' | 'SYSTEM' | 'EVENT';
+
+export type EventKind =
+  | 'AVAILABILITY_CHECKED'
+  | 'SLOT_OFFERED'
+  | 'APPOINTMENT_BOOKED'
+  | 'BOOKING_FAILED'
+  | 'BRANCH_ASKED'
+  | 'BRANCH_SWITCHED'
+  | 'HANDED_OVER'
+  | 'TAKEN_OVER'
+  | 'ASSISTANT_RESUMED';
 
 export interface ConversationSummary {
   id: string;
@@ -35,6 +51,8 @@ export interface ThreadTurn {
   status?: string;
   error?: string | null;
   messageType?: string;
+  eventKind?: EventKind;
+  detail?: unknown;
 }
 
 export interface ConversationDetail {

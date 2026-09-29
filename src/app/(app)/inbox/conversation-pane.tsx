@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bot, Loader2, Send, User as UserIcon } from 'lucide-react';
+import { AlertTriangle, Bot, CalendarCheck, Loader2, Search, Send, User as UserIcon } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Card, Spinner } from '@/components/ui/display';
 import { cn } from '@/lib/cn';
-import { dateTime } from '@/lib/format';
+import { dateTime, time } from '@/lib/format';
 import type { ConversationDetail, ThreadTurn } from './types';
 
 /**
@@ -224,6 +224,18 @@ export function ConversationPane({ id }: { id: string }) {
  * that distinction is most of why anybody opens this screen.
  */
 function Turn({ turn }: { turn: ThreadTurn }) {
+  /**
+   * WHAT THE ASSISTANT DID, DRAWN AS NOT-A-MESSAGE.
+   *
+   * Centred, small, no bubble, no side. A bubble would say the customer saw it,
+   * and they did not: reading the diary, choosing a shop and writing an
+   * appointment are things that happened behind the conversation. Drawn quietly
+   * because in a healthy thread they are scenery — but a booking and a failure
+   * get their own colour, because those are the two anybody is actually looking
+   * for when they open a thread that went wrong.
+   */
+  if (turn.from === 'EVENT') return <ActionRow turn={turn} />;
+
   const mine = turn.from !== 'CUSTOMER';
   const failed = turn.status === 'FAILED';
 
@@ -270,6 +282,37 @@ function Turn({ turn }: { turn: ThreadTurn }) {
             no reason sends somebody to the message log to guess. */}
         {failed && turn.error ? <p className="mt-0.5 text-2xs text-rose-600">{turn.error}</p> : null}
       </div>
+    </div>
+  );
+}
+
+
+function ActionRow({ turn }: { turn: ThreadTurn }) {
+  const booked = turn.eventKind === 'APPOINTMENT_BOOKED';
+  const failed = turn.eventKind === 'BOOKING_FAILED';
+  const control =
+    turn.eventKind === 'HANDED_OVER' ||
+    turn.eventKind === 'TAKEN_OVER' ||
+    turn.eventKind === 'ASSISTANT_RESUMED';
+
+  const Icon = booked ? CalendarCheck : failed ? AlertTriangle : control ? UserIcon : Search;
+
+  return (
+    <div className="flex justify-center">
+      <span
+        className={cn(
+          'inline-flex max-w-[90%] items-center gap-1.5 rounded-full px-2.5 py-1 text-2xs leading-relaxed',
+          booked
+            ? 'bg-emerald-50 font-medium text-emerald-800'
+            : failed
+              ? 'bg-amber-50 font-medium text-amber-800'
+              : 'text-ink-subtle',
+        )}
+      >
+        <Icon className="h-3 w-3 shrink-0" aria-hidden />
+        <span>{turn.body}</span>
+        <span className="shrink-0 opacity-70">· {time(turn.at)}</span>
+      </span>
     </div>
   );
 }
