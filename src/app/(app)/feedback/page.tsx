@@ -4,6 +4,7 @@ import { Globe, MessageSquareHeart, Star } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Avatar, Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } from '@/components/ui/display';
 import { ResolveComplaint } from './resolve-complaint';
+import { ReviewInsightsPanel, type ReviewInsights } from './insights';
 import { PublishToggle } from './publish-toggle';
 import { dateTime, fullName, percent } from '@/lib/format';
 import type { Feedback, SessionUser } from '@/lib/types';
@@ -42,11 +43,12 @@ export default async function FeedbackPage({
   const params = await searchParams;
   const page = Number(params.page ?? 1);
 
-  const [{ data: feedback }, summary, user] = await Promise.all([
+  const [{ data: feedback }, summary, insights, user] = await Promise.all([
     apiFetchList<Feedback>('/feedback', {
       query: { unresolvedOnly: params.unresolvedOnly, source: params.source, page, pageSize: 30 },
     }),
     apiFetchSafe<Reputation>('/feedback/summary'),
+    apiFetchSafe<ReviewInsights>('/feedback/insights'),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
   ]);
 
@@ -238,6 +240,10 @@ export default async function FeedbackPage({
               </div>
             </CardBody>
           </Card>
+
+          {/* Above "By stylist" on purpose: what people keep mentioning is the
+              thing to act on, and which stylist it was is the follow-up. */}
+          <ReviewInsightsPanel insights={insights} />
 
           {summary && summary.byStaff.length > 0 ? (
             <Card>
