@@ -1,80 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
+// The list of paths a customer may open, and why each entry is there.
+import { isPublic } from './lib/public-paths';
 
 const ACCESS_COOKIE = 'sos_at';
 const REFRESH_COOKIE = 'sos_rt';
-
-/**
- * WHAT A CUSTOMER CAN OPEN WITHOUT AN ACCOUNT, AND NOTHING MORE.
- *
- * This was one list matched with a loose startsWith, and loose is the wrong
- * shape for a permission check: a prefix that is public makes every path
- * beginning with those characters public too, whether or not it is the same
- * page.
- *
- * Two consequences. `/invoice` was simply absent, so the link in an invoice
- * email redirected the customer to /login?next=%2Finvoice%2F... and asked them
- * to sign in to a salon system they will never have an account for. And
- * `/feedback` was present for the customer's form at /feedback/<appointment>,
- * which also waved through `/feedback` itself — the staff page listing every
- * customer's feedback. Only the API refusing a request with no cookie stood
- * behind it.
- *
- * Adding `/invoice` to the old list would have done the same to `/invoices`,
- * the staff invoice list, which begins with exactly those characters.
- *
- * So: sections are public in their CHILDREN only, which is where the token is
- * and where the customer goes. The section's own page is not, which is where
- * the staff screen lives.
- */
-/**
- * THE PAGE WAS PUBLIC. WHAT THE PAGE DOES WAS NOT.
- *
- * `/api/proxy/public` is the entry that was missing, and its absence broke
- * every customer-facing action in the app — including online booking — while
- * looking perfectly fine to anybody testing it.
- *
- * The browser never calls the API directly; a client component calls
- * `/api/proxy/<path>` and the route handler attaches the token server-side. So
- * a customer on /feedback/qr/<branch> was let through to the PAGE by the
- * `/feedback/` entry below, filled it in, pressed send — and the POST went to
- * `/api/proxy/public/feedback/qr/<branch>`, which matched nothing here and was
- * redirected to /login. The client then parsed an HTML login page as JSON and
- * showed "Something went wrong. Please try again."
- *
- * Every public action went the same way: picking a stylist, loading free slots,
- * CONFIRMING A BOOKING, submitting feedback, fetching review suggestions,
- * recording the Google tap. Seven calls, all dead for anyone without a salon
- * account, which is every customer the features exist for.
- *
- * And it was invisible to the only people who could have noticed. A salon owner
- * testing their own booking page is signed in, so the cookie is there, the
- * middleware waves the call through and everything works. It fails only for
- * somebody with no session — a customer, a phone, a second browser — which is
- * precisely the case nobody checks and everybody ships.
- *
- * Safe because it is a proxy to the API's OWN unauthenticated router: the
- * backend mounts /public before its authenticate middleware and behind its own
- * rate limiter, so these paths were never protected by this check in the first
- * place. Anything else under /api/proxy still needs the cookie, and any request
- * that slipped past would still meet the API's authenticate middleware and be
- * refused there. This check is a courtesy to the user, not the security
- * boundary — that has always been the API.
- */
-const PUBLIC_SECTIONS = ['/book', '/feedback', '/invoice', '/api/auth', '/api/proxy/public'];
-
-/** Public as themselves, with no child path. */
-const PUBLIC_EXACT = ['/login'];
-
-/** Build output and icons, matched loosely because they carry file extensions. */
-const ASSET_PREFIXES = ['/_next', '/favicon', '/icon', '/apple-icon', '/manifest'];
-
-function isPublic(pathname: string): boolean {
-  if (PUBLIC_EXACT.includes(pathname)) return true;
-  // The trailing slash is the whole guard: /invoice/<token> is a customer's
-  // bill, /invoices is the salon's ledger.
-  if (PUBLIC_SECTIONS.some((section) => pathname.startsWith(`${section}/`))) return true;
-  return ASSET_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
 
 /**
  * Keeps the session alive without the user noticing.
