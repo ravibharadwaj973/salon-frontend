@@ -26,7 +26,41 @@ const REFRESH_COOKIE = 'sos_rt';
  * and where the customer goes. The section's own page is not, which is where
  * the staff screen lives.
  */
-const PUBLIC_SECTIONS = ['/book', '/feedback', '/invoice', '/api/auth'];
+/**
+ * THE PAGE WAS PUBLIC. WHAT THE PAGE DOES WAS NOT.
+ *
+ * `/api/proxy/public` is the entry that was missing, and its absence broke
+ * every customer-facing action in the app — including online booking — while
+ * looking perfectly fine to anybody testing it.
+ *
+ * The browser never calls the API directly; a client component calls
+ * `/api/proxy/<path>` and the route handler attaches the token server-side. So
+ * a customer on /feedback/qr/<branch> was let through to the PAGE by the
+ * `/feedback/` entry below, filled it in, pressed send — and the POST went to
+ * `/api/proxy/public/feedback/qr/<branch>`, which matched nothing here and was
+ * redirected to /login. The client then parsed an HTML login page as JSON and
+ * showed "Something went wrong. Please try again."
+ *
+ * Every public action went the same way: picking a stylist, loading free slots,
+ * CONFIRMING A BOOKING, submitting feedback, fetching review suggestions,
+ * recording the Google tap. Seven calls, all dead for anyone without a salon
+ * account, which is every customer the features exist for.
+ *
+ * And it was invisible to the only people who could have noticed. A salon owner
+ * testing their own booking page is signed in, so the cookie is there, the
+ * middleware waves the call through and everything works. It fails only for
+ * somebody with no session — a customer, a phone, a second browser — which is
+ * precisely the case nobody checks and everybody ships.
+ *
+ * Safe because it is a proxy to the API's OWN unauthenticated router: the
+ * backend mounts /public before its authenticate middleware and behind its own
+ * rate limiter, so these paths were never protected by this check in the first
+ * place. Anything else under /api/proxy still needs the cookie, and any request
+ * that slipped past would still meet the API's authenticate middleware and be
+ * refused there. This check is a courtesy to the user, not the security
+ * boundary — that has always been the API.
+ */
+const PUBLIC_SECTIONS = ['/book', '/feedback', '/invoice', '/api/auth', '/api/proxy/public'];
 
 /** Public as themselves, with no child path. */
 const PUBLIC_EXACT = ['/login'];
