@@ -50,7 +50,28 @@ export function CustomerFilters({
 
   // A tier or lapsed change arriving from elsewhere (back button) should be
   // reflected in the box too.
+  /**
+   * ACCEPT THE URL ONLY WHEN IT DID NOT COME FROM US.
+   *
+   * This effect exists for the back button: leave the page with "jha" in the
+   * box, come back, and the box should say "jha" again. But `q` also arrives
+   * as the ECHO of our own navigation a moment ago, and that echo is stale by
+   * however much was typed while it was in flight.
+   *
+   * Which is why typing ate characters. Type "jha", the debounce fires and we
+   * navigate; type "r" before the server answers; the answer lands carrying
+   * q="jha", this effect runs setText("jha") — and the "r" is gone. Type it
+   * again, lose the next letter. On a slow connection it is unusable, and it
+   * looked like the app fighting the keyboard because that is exactly what it
+   * was doing.
+   *
+   * `applied.current` is already the last value WE sent. If `q` matches it,
+   * this is our own echo and the box is ahead of it: say nothing. Anything
+   * else is a real navigation — back button, a shared link, a filter changed
+   * elsewhere — and that should win.
+   */
   useEffect(() => {
+    if (q === applied.current) return;
     applied.current = q;
     setText(q);
   }, [q]);
