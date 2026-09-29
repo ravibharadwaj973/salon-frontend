@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Copy, Heart, Lock, Star } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { apiPost, errorMessage } from '@/lib/client';
+import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/form';
 
@@ -120,6 +120,35 @@ export function FeedbackForm({
   /** Which suggestion they copied, so the tick sits on that one. */
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+  /**
+   * The suggestions arrive on their OWN request, after the rating is stored.
+   *
+   * They used to come back with the submit, which meant the customer's rating
+   * waited on a model composing five reviews — and when that outran the
+   * serverless limit in front of the API, the browser got an empty body and
+   * the page announced a failure for a rating that had been saved. The rating
+   * is the thing that cannot be asked for twice; it must not depend on a
+   * third party being quick.
+   *
+   * Null means "still writing", an empty array means "none, move on".
+   */
+  const [suggested, setSuggested] = useState<string[] | null>(null);
+
+  /**
+   * Fired once, when a rating has just been stored. Failure is silent by
+   * design: no suggestions simply means the Google link appears on its own,
+   * which is what this screen did before suggestions existed.
+   */
+  useEffect(() => {
+    const id = result?.feedbackId;
+    if (!id) return;
+    let live = true;
+    void apiGet<{ reviewDrafts: string[] }>(`public/feedback/suggestions/${id}`)
+      .then((data) => { if (live) setSuggested(data.reviewDrafts ?? []); })
+      .catch(() => { if (live) setSuggested([]); });
+    return () => { live = false; };
+  }, [result?.feedbackId]);
+
   if (alreadySubmitted && !result) {
     return (
       <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
@@ -139,8 +168,9 @@ export function FeedbackForm({
      * that showed nothing in that case would look broken during the minutes
      * between the two deploys.
      */
-    const suggestions =
-      result.reviewDrafts?.length ? result.reviewDrafts : result.reviewDraft ? [result.reviewDraft] : [];
+    const suggestions = suggested ?? [];
+    /** Still being written — shown as a line of text, never a blocking spinner. */
+    const writing = result.feedbackId != null && suggested === null;
     return (
       <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
         <span
@@ -181,6 +211,10 @@ export function FeedbackForm({
           * open. Reversed, they land on a blank Google form having left the
           * draft behind on a tab they have closed.
           */}
+        {writing ? (
+          <p className="mt-4 text-xs text-ink-subtle">Putting what you said into words…</p>
+        ) : null}
+
         {suggestions.length > 0 ? (
           <div className="mt-4 text-left">
             {/* Two labels, because there are two cases and one of them would be
