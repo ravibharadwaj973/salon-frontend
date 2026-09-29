@@ -8,6 +8,7 @@ import { NewUserButton } from './new-user-button';
 import { ProfileLayoutEditor } from './profile-layout-editor';
 import { BillingDefaultsCard } from './billing-defaults-card';
 import { GoogleReviewCard } from './google-review-card';
+import { ReviewQrCard } from './review-qr-card';
 import { BookingEmbedCard } from './booking-embed-card';
 import { BookingCapacityCard } from './booking-capacity-card';
 import { UserPermissionsButton } from './user-permissions-button';
@@ -266,6 +267,10 @@ export default async function SettingsPage({
           tenantFallback={tenantGoogleReviewUrl}
           canEdit={canManageBranches}
           canEditFallback={user?.permissions.includes('tenant.manage') ?? false}
+        />
+
+        <ReviewQrCard
+          branches={(branches?.data ?? []).map((branch) => ({ id: branch.id, name: branch.name }))}
         />
 
         <WebsiteCard
