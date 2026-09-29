@@ -117,6 +117,26 @@ const PROVIDER_REASONS: Record<string, string> = {
  */
 function outcome(message: MessageLogEntry): { text: string; tone: string } {
   /**
+   * SAY IT BEFORE ANYTHING ELSE WHEN THE CHANNEL WAS CHANGED FOR THEM.
+   *
+   * A salon picks WhatsApp, a template turns out not to be approved by Meta,
+   * and the send quietly moves to the email twin. That is the right call — an
+   * email beats silence while Meta decides — but it happened invisibly, so the
+   * activity list showed an email nobody asked for and the owner concluded
+   * WhatsApp was broken. It is not: that one template is not approved yet, and
+   * the moment it is, sends move back on their own.
+   *
+   * Checked before the status switch because it explains the row's very
+   * existence, and a delivery receipt is the less surprising half of it.
+   */
+  if (message.errorCode === 'SENT_AS_EMAIL') {
+    return {
+      text: `Sent by email instead of WhatsApp — ${message.errorMessage ?? 'that WhatsApp template is not approved by Meta yet'}. Nothing to switch back: once Meta approves it, these go by WhatsApp again on their own.`,
+      tone: 'text-amber-700',
+    };
+  }
+
+  /**
    * A known provider code wins over the provider's own sentence, because the
    * whole point is that its sentence was not usable. An unknown one keeps
    * Meta's text AND shows the code, which is what makes it searchable.
