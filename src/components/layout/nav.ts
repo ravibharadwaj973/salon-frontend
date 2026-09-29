@@ -23,6 +23,7 @@ import {
   Wallet,
   Send,
   Workflow,
+  MessagesSquare,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { P, type Permission } from '@/lib/permissions';
@@ -89,6 +90,10 @@ export const NAV: NavGroup[] = [
       { href: '/journeys', label: 'Journeys', icon: Workflow, permissions: [P.CAMPAIGN_VIEW], feature: 'journeys' },
       { href: '/templates', label: 'Templates', icon: BadgePercent, permissions: [P.CAMPAIGN_VIEW] },
       { href: '/automations', label: 'Automations', icon: Workflow, permissions: [P.CAMPAIGN_VIEW] },
+      // Above Messages on purpose: that page is the log of what the salon SENT,
+      // this one is the conversation somebody has to answer. A person coming to
+      // look at WhatsApp almost always wants the second.
+      { href: '/inbox', label: 'Inbox', icon: MessagesSquare, permissions: [P.CAMPAIGN_VIEW] },
       // Sits next to the things that send, because it is where you find out
       // whether they did.
       { href: '/messages', label: 'Messages', icon: Send, permissions: [P.CAMPAIGN_VIEW] },
