@@ -8,6 +8,7 @@ import { Badge, Card, CardBody, CardHeader, EmptyState, StatTile, StatusBadge } 
 import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { CampaignFunnel, type FunnelStage } from '../../campaigns/[id]/funnel';
 import { ActivityChart, type ActivityPoint } from './activity-chart';
+import { OutcomeFunnel } from './outcome-funnel';
 import { JourneyToggle } from '../journey-toggle';
 import { ACTION_LABEL, triggerLabel } from '../labels';
 import { count, dateTime, fromNow, money, percent } from '@/lib/format';
@@ -33,6 +34,15 @@ interface Performance {
     steps: { id: string; channel: string | null; templateName: string | null; actionType: string }[];
   };
   period: { from: string; to: string };
+  /** What the automation brought back — see journey-outcomes.ts. */
+  outcomes: {
+    reached: number;
+    engaged: number;
+    booked: number;
+    visited: number;
+    revenue: number;
+    windowDays: number;
+  };
   runs: Record<string, number> & { entered: number };
   funnel: {
     entered: number;
@@ -106,7 +116,7 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
     apiFetch<SessionUser>('/auth/me', { noBranch: true }).catch(() => null),
   ]);
 
-  const { journey, funnel, activity, channels, readMeasurable } = performance;
+  const { journey, funnel, activity, channels, readMeasurable, outcomes } = performance;
   const canManage = user?.permissions.includes('journey.manage') ?? false;
 
   const daysCovered = activity.length;
@@ -207,6 +217,15 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
 
       {/* The rate, not the total. See activity-chart.tsx for why this is the
           chart an automation needs and a campaign does not. */}
+      {/* Above the activity chart deliberately: "did it work" is the question
+          somebody opens this page with, and "how often did it run" is how they
+          diagnose the answer. */}
+      {outcomes ? (
+        <div className="mb-3">
+          <OutcomeFunnel outcomes={outcomes} />
+        </div>
+      ) : null}
+
       <Card className="mb-3">
         <CardHeader
           title="How often it fires"
