@@ -1,11 +1,38 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Check, Copy, Heart, Lock, Star } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Copy, Heart, Loader2, Lock, Star } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/form';
+
+/**
+ * HOW LONG A THANK-YOU SCREEN MAY ASK SOMEBODY TO WAIT.
+ *
+ * Three seconds. They have just pressed send, they are standing at a counter,
+ * and the only thing left to decide is whether to bother with Google — so the
+ * suggestions are worth a short pause and nothing more. At three seconds the
+ * spinner goes and the screen settles into what it looked like before
+ * suggestions existed: a thank-you and the button, complete and usable.
+ */
+const SUGGESTION_WAIT_MS = 3000;
+
+/**
+ * AND HOW LONG THE ANSWER IS STILL WORTH HAVING — WHICH IS NOT THE SAME NUMBER.
+ *
+ * Capping both at three seconds would have turned the feature off rather than
+ * making it fast. The server gives the model eight seconds and asks it for five
+ * drafts; on a 120B model that is several seconds of real work, so an abort at
+ * three would miss almost every generation and no customer would ever see a
+ * suggestion again. The screen would be honest and empty.
+ *
+ * So the two questions are separated. The customer waits three seconds — never
+ * longer, whatever happens. The REQUEST keeps going a little past the server's
+ * own leash, and if drafts arrive after the spinner has gone they are shown
+ * then, above the button, where they were always meant to be.
+ */
+const SUGGESTION_GIVE_UP_MS = 9000;
 
 interface Result {
   thankYou: boolean;
@@ -120,6 +147,7 @@ export function FeedbackForm({
   /** Which suggestion they copied, so the tick sits on that one. */
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+
   /**
    * The suggestions arrive on their OWN request, after the rating is stored.
    *
@@ -135,18 +163,106 @@ export function FeedbackForm({
   const [suggested, setSuggested] = useState<string[] | null>(null);
 
   /**
+   * Whether the customer has waited long enough to be shown the rest.
+   *
+   * Separate from `suggested` because the two answer different questions:
+   * `suggested` is whether an answer has arrived, `waited` is whether we are
+   * still willing to make somebody look at a spinner. The screen stops waiting
+   * at three seconds; the answer may still turn up after that and is still
+   * worth showing.
+   */
+  const [waited, setWaited] = useState(false);
+
+  /**
+   * `tapped` again, readable from inside the fetch.
+   *
+   * The effect runs once and closes over the first value of `tapped`, so it
+   * cannot see a tap that happens while the request is in flight — and adding
+   * `tapped` to the dependencies would re-run the request on every tap. A ref
+   * is the same fact without either problem.
+   */
+  const tappedRef = useRef(false);
+
+  /**
    * Fired once, when a rating has just been stored. Failure is silent by
    * design: no suggestions simply means the Google link appears on its own,
    * which is what this screen did before suggestions existed.
+   *
+   * ── The wait is bounded, and the bound is the point ───────────────────────
+   *
+   * There was no timeout at all. If the model was slow, or the request never
+   * came back, `suggested` stayed null forever and the customer sat looking at
+   * "Putting what you said into words…" with no end to it — on a thank-you
+   * screen, at a counter, in the fifteen seconds before they decide it is not
+   * worth it. A promise with no deadline is worse than no promise.
+   *
+   * Three seconds, because this screen is the whole feature's one moment: they
+   * have just pressed send and are deciding whether to bother with Google.
+   * Nothing on it is worth making them wait longer than it takes to read the
+   * thank-you line.
+   *
+   * THE ONE THING A LATE ANSWER MAY NOT DO is rearrange a page somebody has
+   * already acted on. The suggestions sit above the Google button, so showing
+   * them moves it; if the customer has already tapped through to Google, that
+   * moment has passed and nothing more is added behind them.
    */
   useEffect(() => {
     const id = result?.feedbackId;
     if (!id) return;
+
     let live = true;
-    void apiGet<{ reviewDrafts: string[] }>(`public/feedback/suggestions/${id}`)
-      .then((data) => { if (live) setSuggested(data.reviewDrafts ?? []); })
-      .catch(() => { if (live) setSuggested([]); });
-    return () => { live = false; };
+    /**
+     * Not the same question as `live`, and both are needed.
+     *
+     * `live` is whether the component is still mounted. `abandoned` is whether
+     * the answer is still wanted at all. A reply that lands a moment after the
+     * final timer fires would otherwise still be rendered — aborting is
+     * asynchronous and does not un-resolve a response already on its way.
+     */
+    let abandoned = false;
+    const controller = new AbortController();
+
+    /** Three seconds: the spinner goes, the screen is complete without it. */
+    const stopWaiting = setTimeout(() => {
+      if (live) setWaited(true);
+    }, SUGGESTION_WAIT_MS);
+
+    /** Nine: the answer is no longer worth having, so stop asking for it. */
+    const giveUp = setTimeout(() => {
+      if (!live) return;
+      abandoned = true;
+      // Empty, not null: "none, move on" rather than "still writing".
+      setSuggested([]);
+      controller.abort();
+    }, SUGGESTION_GIVE_UP_MS);
+
+    const done = () => {
+      clearTimeout(stopWaiting);
+      clearTimeout(giveUp);
+    };
+
+    void apiGet<{ reviewDrafts: string[] }>(`public/feedback/suggestions/${id}`, {
+      signal: controller.signal,
+    })
+      .then((data) => {
+        if (!live || abandoned) return;
+        done();
+        // Already on their way to Google: their tap decided it, and a list
+        // appearing above the button now would move it under their finger.
+        if (tappedRef.current) return;
+        setSuggested(data.reviewDrafts ?? []);
+      })
+      .catch(() => {
+        if (!live || abandoned) return;
+        done();
+        setSuggested([]);
+      });
+
+    return () => {
+      live = false;
+      done();
+      controller.abort();
+    };
   }, [result?.feedbackId]);
 
   if (alreadySubmitted && !result) {
@@ -169,8 +285,19 @@ export function FeedbackForm({
      * between the two deploys.
      */
     const suggestions = suggested ?? [];
-    /** Still being written — shown as a line of text, never a blocking spinner. */
-    const writing = result.feedbackId != null && suggested === null;
+    /**
+     * Still being written, AND still worth showing a spinner for.
+     *
+     * `!waited` is what bounds it. Without that this was true for as long as the
+     * request took — which, when the model was slow or the request never came
+     * back at all, meant forever: a customer left looking at a promise with no
+     * deadline on a screen that had otherwise finished.
+     *
+     * Nothing below is blocked by it. The thank-you, the apology and the Google
+     * button all render regardless; this only decides whether a spinner sits
+     * among them.
+     */
+    const writing = result.feedbackId != null && suggested === null && !waited;
     return (
       <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
         <span
@@ -211,8 +338,26 @@ export function FeedbackForm({
           * open. Reversed, they land on a blank Google form having left the
           * draft behind on a tab they have closed.
           */}
+        {/**
+          * A SPINNER, BECAUSE A LINE OF TEXT IS NOT A LOADER.
+          *
+          * This was a static sentence, which on a screen that has just finished
+          * doing something reads as a statement rather than as progress — and
+          * with nothing moving, a page that has stopped working looks exactly
+          * the same as one that is still thinking. It also had no end: without
+          * the timer above, that sentence stayed on screen forever whenever the
+          * model was slow.
+          *
+          * Given a fixed height so the Google button below sits in the same
+          * place before and after. It is a tap target on a phone, and a button
+          * that moves the instant somebody reaches for it is how people end up
+          * pressing whatever took its place.
+          */}
         {writing ? (
-          <p className="mt-4 text-xs text-ink-subtle">Putting what you said into words…</p>
+          <div className="mt-4 flex h-9 items-center justify-center gap-2" role="status" aria-live="polite">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600" aria-hidden />
+            <span className="text-xs text-ink-subtle">Putting what you said into words…</span>
+          </div>
         ) : null}
 
         {suggestions.length > 0 ? (
@@ -293,6 +438,7 @@ export function FeedbackForm({
               rel="noreferrer"
               onClick={() => {
                 setTapped(true);
+                tappedRef.current = true;
                 // Fire and forget — awaiting it would turn the tap into a
                 // pop-up the browser blocks.
                 const key = result.feedbackId || appointmentId;
