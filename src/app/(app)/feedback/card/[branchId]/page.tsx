@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'qrcode';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { apiFetch, apiFetchList } from '@/lib/api';
-import { PrintButton } from './print-button';
+import { CardActions } from './card-actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Review card' };
@@ -51,26 +51,46 @@ export default async function ReviewCardPage({ params }: { params: Promise<{ bra
   const base = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.jharavi.in';
   const url = `${base.replace(/\/$/, '')}/feedback/qr/${branch.id}`;
 
-  const svg = await QRCode.toString(url, {
-    type: 'svg',
-    margin: 1,
-    width: 340,
-    errorCorrectionLevel: 'M',
-    color: { dark: '#1c1917', light: '#ffffff' },
-  });
+  const [svg, pngDataUrl] = await Promise.all([
+    QRCode.toString(url, {
+      type: 'svg',
+      margin: 1,
+      width: 340,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#1c1917', light: '#ffffff' },
+    }),
+    /**
+     * A second copy as PNG, for downloading.
+     *
+     * The SVG on screen is what prints; this is what gets dropped into a
+     * poster, emailed to a print shop or put in an Instagram story, and PNG is
+     * the format all three accept without a question. Generated at 1024px
+     * because a QR downloaded at screen size and then blown up to A4 is a
+     * code that no longer scans — the one failure a salon would not think to
+     * check before printing two hundred of them.
+     */
+    QRCode.toDataURL(url, {
+      width: 1024,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#1c1917', light: '#ffffff' },
+    }),
+  ]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       {/* Everything outside the card itself is hidden when printing. */}
-      <div className="mb-5 flex items-center justify-between print:hidden">
+      <div className="mb-5 flex flex-col gap-3 print:hidden sm:flex-row sm:items-center sm:justify-between">
         <Link href="/feedback" className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
           <ArrowLeft className="h-4 w-4" />
           Back to feedback
         </Link>
-        <PrintButton>
-          <Printer className="h-4 w-4" />
-          Print this card
-        </PrintButton>
+        <CardActions
+          url={url}
+          salonName={tenant?.name ?? 'Our salon'}
+          branchName={branch.name}
+          pngDataUrl={pngDataUrl}
+        />
       </div>
 
       <div className="rounded-2xl border border-stone-200 bg-white p-10 text-center shadow-card print:border-0 print:shadow-none">
