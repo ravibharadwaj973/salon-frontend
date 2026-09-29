@@ -9,3 +9,6 @@ build/
 .DS_Store
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# Files Claude could not delete through the bridge; safe to remove.
+_to_delete/
