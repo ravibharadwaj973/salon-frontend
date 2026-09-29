@@ -33,6 +33,15 @@ interface Result {
    * not answer in time. The screen then shows the Google link on its own.
    */
   reviewDrafts?: string[] | null;
+  /**
+   * The feedback row's own id, returned only by the QR route.
+   *
+   * The other two paths record the Google tap against the visit they came
+   * from. A QR rating has no visit, so the tap is recorded against the rating
+   * itself — and without this the form would post to an empty id and the
+   * salon would never learn that the card by the till is working.
+   */
+  feedbackId?: string;
 }
 
 const LABELS = ['', 'Poor', 'Not great', 'Fine', 'Good', 'Loved it'];
@@ -62,8 +71,24 @@ export function FeedbackForm({
   services,
   staffName,
   alreadySubmitted,
+  /**
+   * WHERE TO POST, AND WHETHER THE CUSTOMER PICKS THEIR OWN SERVICES.
+   *
+   * Three routes lead here: an appointment link, a bill link, and the QR card
+   * on the counter. The first two KNOW the visit, so `services` is what the
+   * customer had and the form never asks. The third knows only the branch, so
+   * it must ask — and asking is the whole difference between the two screens.
+   *
+   * One component rather than two, because everything after the first
+   * question is identical, and a second copy of a star rating is a second
+   * place for the two to drift apart.
+   */
+  submitPath,
+  pickServices = false,
 }: {
   appointmentId: string;
+  submitPath?: string;
+  pickServices?: boolean;
   customerName: string;
   /**
    * The services on THIS visit, with their ids.
@@ -82,6 +107,11 @@ export function FeedbackForm({
   const [waitRating, setWaitRating] = useState(0);
   /** serviceId -> stars. Absent means not answered, which is allowed. */
   const [serviceRatings, setServiceRatings] = useState<Record<string, number>>({});
+  /**
+   * What they say they had. Only used in `pickServices` mode; when the visit
+   * is known this stays untouched and every service is rateable.
+   */
+  const [picked, setPicked] = useState<string[]>([]);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,7 +261,8 @@ export function FeedbackForm({
                 setTapped(true);
                 // Fire and forget — awaiting it would turn the tap into a
                 // pop-up the browser blocks.
-                void apiPost(`public/feedback/${appointmentId}/google`, {}).catch(() => {});
+                const key = result.feedbackId || appointmentId;
+                if (key) void apiPost(`public/feedback/${key}/google`, {}).catch(() => {});
               }}
               className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
             >
@@ -252,7 +283,14 @@ export function FeedbackForm({
     );
   }
 
+  /** The rows the star questions are asked about. */
+  const rateable = pickServices ? services.filter((s) => picked.includes(s.id)) : services;
+
   async function submit() {
+    if (pickServices && picked.length === 0) {
+      setError('Please tick what you had first.');
+      return;
+    }
     if (rating === 0) {
       setError('Please pick a rating first.');
       return;
@@ -262,7 +300,7 @@ export function FeedbackForm({
     setError(null);
     try {
       setResult(
-        await apiPost<Result>(`public/feedback/${appointmentId}`, {
+        await apiPost<Result>(submitPath ?? `public/feedback/${appointmentId}`, {
           rating,
           comment: comment.trim() || undefined,
           staffRating: staffRating || undefined,
@@ -272,7 +310,7 @@ export function FeedbackForm({
            * not "nought out of five", and sending it would put a score in the
            * service's average that nobody gave.
            */
-          services: services
+          services: rateable
             .filter((service) => (serviceRatings[service.id] ?? 0) > 0)
             .map((service) => ({ serviceId: service.id, rating: serviceRatings[service.id]! })),
         }),
@@ -290,13 +328,66 @@ export function FeedbackForm({
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-card">
       <h2 className="text-center text-base font-semibold text-ink">How was it, {customerName}?</h2>
-      {services.length > 0 ? (
+      {services.length > 0 && !pickServices ? (
         <p className="mt-1 text-center text-xs text-ink-muted">
           {services.map((service) => service.name).join(', ')}
           {staffName ? ` with ${staffName}` : ''}
         </p>
       ) : null}
 
+      {/**
+        * WHAT DID YOU HAVE? — asked only when nobody knows.
+        *
+        * First, above the stars, because the rest of the page is about these
+        * services and a star given before choosing them is a star about
+        * nothing. Grouped by category and scrollable: a salon menu runs to
+        * fifty lines, and a wall of them on a phone is a page people close.
+        *
+        * Multi-select, because a haircut and a facial in one sitting is the
+        * normal case and is exactly the visit worth hearing about.
+        */}
+      {pickServices ? (
+        <div className="mt-5">
+          <p className="text-sm font-medium text-ink">What did you have today?</p>
+          <p className="mt-0.5 text-xs text-ink-muted">Tick everything — you can pick more than one.</p>
+          <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-stone-200 p-2">
+            {services.map((service) => {
+              const on = picked.includes(service.id);
+              return (
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() =>
+                    setPicked((current) =>
+                      current.includes(service.id)
+                        ? current.filter((id) => id !== service.id)
+                        : [...current, service.id],
+                    )
+                  }
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
+                    on ? 'bg-brand-50 text-ink' : 'text-ink-muted hover:bg-stone-50',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                      on ? 'border-brand-500 bg-brand-600' : 'border-stone-300 bg-white',
+                    )}
+                  >
+                    {on ? <Check className="h-3 w-3 text-white" /> : null}
+                  </span>
+                  {service.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {/* The stars wait until there is something to rate. */}
+      {pickServices && picked.length === 0 ? null : (
+      <>
       <div className="my-6 flex justify-center gap-1.5" onMouseLeave={() => setHover(0)}>
         {[1, 2, 3, 4, 5].map((value) => (
           <button
@@ -315,6 +406,8 @@ export function FeedbackForm({
       </div>
 
       <p className="mb-4 h-4 text-center text-xs font-medium text-ink-muted">{LABELS[shown] ?? ''}</p>
+      </>
+      )}
 
       {/**
         * A ROW PER SERVICE, ONCE THEY HAVE ANSWERED THE FIRST QUESTION.
@@ -328,10 +421,10 @@ export function FeedbackForm({
         * the answer that must not be lost, and two services rated out of three
         * is still two more than the single number this form used to collect.
         */}
-      {rating > 0 && services.length > 0 ? (
+      {rating > 0 && rateable.length > 0 ? (
         <div className="mb-4 space-y-3 rounded-xl border border-stone-200 p-3.5">
           <p className="text-xs font-medium text-ink">And each one on its own?</p>
-          {services.map((service) => (
+          {rateable.map((service) => (
             <MiniStars
               key={service.id}
               label={service.name}
