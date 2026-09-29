@@ -6,7 +6,8 @@ import { Avatar, Card, CardBody, CardHeader, EmptyState, PageHeader, StatTile } 
 import { ResolveComplaint } from './resolve-complaint';
 import { ReviewInsightsPanel, type ReviewInsights } from './insights';
 import { PublishToggle } from './publish-toggle';
-import { dateTime, fullName, percent } from '@/lib/format';
+import { cn } from '@/lib/cn';
+import { dateTime, dayLabel, daysAgo, fullName, percent } from '@/lib/format';
 import type { Feedback, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Feedback' };
@@ -35,22 +36,68 @@ interface Reputation {
   website?: { count: number; averageRating: number | null };
 }
 
+/**
+ * The periods a salon actually asks about.
+ *
+ * Four, not a date picker. "How was this week" and "how is the month going" are
+ * the two real questions; a pair of calendar inputs makes somebody choose two
+ * dates to ask one of them. Custom ranges belong on a report, not on the screen
+ * people open to read complaints.
+ */
+const RANGES = [
+  { key: '7', label: 'Last 7 days', days: 7 },
+  { key: '30', label: 'Last 30 days', days: 30 },
+  { key: '90', label: 'Last 90 days', days: 90 },
+  { key: 'all', label: 'All time', days: null as number | null },
+] as const;
+
 export default async function FeedbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ unresolvedOnly?: string; source?: string; page?: string }>;
+  searchParams: Promise<{ unresolvedOnly?: string; source?: string; page?: string; days?: string }>;
 }) {
   const params = await searchParams;
   const page = Number(params.page ?? 1);
 
+  /**
+   * THE SAME PERIOD EVERYWHERE ON THE PAGE.
+   *
+   * The range goes to all three requests, not just the list. A page showing
+   * "last 7 days" above an average computed from two years of feedback is worse
+   * than showing neither: the salon reads the two numbers together and draws a
+   * conclusion about the week from a figure that cannot move.
+   *
+   * Measured on the salon's clock rather than the server's, like every other day
+   * boundary here — otherwise "last 7 days" starts a day early for the five and
+   * a half hours each evening that UTC is behind.
+   */
+  const range = RANGES.find((option) => option.key === (params.days ?? '30')) ?? RANGES[1]!;
+  const from = range.days ? daysAgo(range.days) : undefined;
+
   const [{ data: feedback }, summary, insights, user] = await Promise.all([
     apiFetchList<Feedback>('/feedback', {
-      query: { unresolvedOnly: params.unresolvedOnly, source: params.source, page, pageSize: 30 },
+      query: { unresolvedOnly: params.unresolvedOnly, source: params.source, page, pageSize: 30, from },
     }),
-    apiFetchSafe<Reputation>('/feedback/summary'),
-    apiFetchSafe<ReviewInsights>('/feedback/insights'),
+    apiFetchSafe<Reputation>('/feedback/summary', { query: { from } }),
+    apiFetchSafe<ReviewInsights>('/feedback/insights', { query: { from } }),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
   ]);
+
+  /**
+   * Grouped by the day the customer left it.
+   *
+   * The list was one undifferentiated column, which reads as a pile rather than
+   * a history — and the question a salon actually asks of it is "what came in
+   * today", "was Saturday bad". The API already returns newest first, so this
+   * only has to keep that order and break it into days.
+   */
+  const byDay: { label: string; items: Feedback[] }[] = [];
+  for (const item of feedback) {
+    const label = dayLabel(item.createdAt);
+    const last = byDay[byDay.length - 1];
+    if (last && last.label === label) last.items.push(item);
+    else byDay.push({ label, items: [item] });
+  }
 
   const canResolve = user?.permissions.includes('feedback.manage') ?? false;
   const maxCount = Math.max(1, ...Object.values(summary?.distribution ?? {}));
@@ -61,6 +108,38 @@ export default async function FeedbackPage({
         title="Feedback"
         description="4–5 stars are invited to review on Google. 1–3 stars come straight to you instead."
       />
+
+      {/**
+        * The period, above the figures it governs.
+        *
+        * Above rather than beside the list, because it moves the stat tiles and
+        * the insights panel too. A control that changes four numbers should not
+        * look like it belongs to one of them.
+        */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {RANGES.map((option) => {
+          const query = new URLSearchParams();
+          if (option.key !== '30') query.set('days', option.key);
+          if (params.unresolvedOnly) query.set('unresolvedOnly', params.unresolvedOnly);
+          if (params.source) query.set('source', params.source);
+          const href = query.size > 0 ? `/feedback?${query.toString()}` : '/feedback';
+
+          return (
+            <Link
+              key={option.key}
+              href={href}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                option.key === range.key
+                  ? 'border-brand-300 bg-brand-50 text-brand-700'
+                  : 'border-stone-200 bg-white text-ink-muted hover:border-brand-200',
+              )}
+            >
+              {option.label}
+            </Link>
+          );
+        })}
+      </div>
 
       <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
@@ -85,7 +164,10 @@ export default async function FeedbackPage({
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader
-            title={params.unresolvedOnly === 'true' ? 'Unresolved complaints' : 'Recent feedback'}
+            title={params.unresolvedOnly === 'true' ? 'Unresolved complaints' : 'Feedback'}
+            /* The period named on the card as well as in the chips, so a
+               screenshot of this list is not ambiguous about what it covers. */
+            subtitle={range.days ? `Newest first · ${range.label.toLowerCase()}` : 'Newest first · all time'}
             action={
               params.unresolvedOnly === 'true' ? (
                 <Link href="/feedback" className="text-xs font-medium text-brand-700 hover:underline">
@@ -106,7 +188,26 @@ export default async function FeedbackPage({
             />
           ) : (
             <ul className="divide-y divide-stone-100">
-              {feedback.map((item) => (
+              {byDay.map((group) => (
+                <li key={group.label}>
+                  {/**
+                    * The day, and how many came in on it.
+                    *
+                    * Sticky so the heading stays put while somebody scrolls a
+                    * busy day — otherwise, three screens into Saturday, there is
+                    * nothing on screen saying which day this is.
+                    */}
+                  <div className="sticky top-0 z-10 flex items-baseline justify-between gap-2 border-b border-stone-100 bg-stone-50/95 px-5 py-2 backdrop-blur">
+                    <span className="text-2xs font-medium uppercase tracking-wide text-ink-muted">
+                      {group.label}
+                    </span>
+                    <span className="text-2xs tabular-nums text-ink-subtle">
+                      {group.items.length === 1 ? '1 review' : `${group.items.length} reviews`}
+                    </span>
+                  </div>
+
+                  <ul className="divide-y divide-stone-100">
+                    {group.items.map((item) => (
                 <li key={item.id} className="px-5 py-4">
                   <div className="flex items-start gap-3">
                     <Avatar name={fullName(item.customer)} id={item.customer?.id ?? item.id} size="sm" />
@@ -185,6 +286,9 @@ export default async function FeedbackPage({
                       ) : null}
                     </div>
                   </div>
+                </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>

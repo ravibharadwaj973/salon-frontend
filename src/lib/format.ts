@@ -198,3 +198,28 @@ export function colorFor(id: string): string {
 export function pluralise(n: number, singular: string, plural?: string): string {
   return `${count(n)} ${n === 1 ? singular : (plural ?? `${singular}s`)}`;
 }
+
+/**
+ * The day something happened, written the way somebody would say it.
+ *
+ * "Today", "Yesterday", then the weekday for the rest of the week, then the
+ * date. A list grouped by day is read from the top, and the first two headings
+ * are the ones anybody actually cares about — writing "29 September" above
+ * today's reviews makes a reader do arithmetic to find out whether it is now.
+ *
+ * On the salon's clock, like every other day boundary here: on UTC, everything
+ * after 5:30pm in Lucknow lands under tomorrow's heading.
+ */
+export function dayLabel(value: string | Date | null | undefined): string {
+  if (!value) return 'Unknown date';
+  const day = inZone(value).startOf('day');
+  const today = dayjs().tz(SALON_TZ).startOf('day');
+  const diff = today.diff(day, 'day');
+
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  // Inside the last week the weekday is more use than the number: a salon
+  // thinks in "Saturday was busy", not "the 27th was busy".
+  if (diff > 1 && diff < 7) return day.format('dddd');
+  return day.format('dddd D MMMM');
+}
