@@ -123,15 +123,22 @@ function outcome(message: MessageLogEntry): { text: string; tone: string } {
    * and the send quietly moves to the email twin. That is the right call — an
    * email beats silence while Meta decides — but it happened invisibly, so the
    * activity list showed an email nobody asked for and the owner concluded
-   * WhatsApp was broken. It is not: that one template is not approved yet, and
-   * the moment it is, sends move back on their own.
+   * WhatsApp was broken. It is not — one template cannot send — and the reason
+   * is carried on the row rather than guessed at here.
+   *
+   * Deliberately NOT "waiting for Meta to approve it". Approval is only one of
+   * the reasons: an approved template with no Meta name recorded, or one whose
+   * placeholders do not map to a customer field, is equally unsendable and is
+   * fixed inside this app rather than by waiting. Naming the wrong cause sends
+   * somebody to watch a queue at Meta while the actual fix sits on the
+   * template screen.
    *
    * Checked before the status switch because it explains the row's very
    * existence, and a delivery receipt is the less surprising half of it.
    */
   if (message.errorCode === 'SENT_AS_EMAIL') {
     return {
-      text: `Sent by email instead of WhatsApp — ${message.errorMessage ?? 'that WhatsApp template is not approved by Meta yet'}. Nothing to switch back: once Meta approves it, these go by WhatsApp again on their own.`,
+      text: `Sent by email instead of WhatsApp. ${message.errorMessage ?? 'That WhatsApp template could not be sent.'} Nothing to switch back here — every send re-checks, so these return to WhatsApp the moment that is fixed.`,
       tone: 'text-amber-700',
     };
   }
