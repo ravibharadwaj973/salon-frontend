@@ -78,7 +78,25 @@ export const PUBLIC_SECTIONS = [
 ];
 
 /** Public as themselves, with no child path. */
-export const PUBLIC_EXACT = ['/login'];
+export const PUBLIC_EXACT = [
+  '/login',
+  /**
+   * Asking to be let back in, and setting a password from a link support
+   * issued. Both are reached by somebody who CANNOT sign in — guarding them
+   * behind a session would mean the only way to recover an account is to
+   * already have access to it.
+   *
+   * Listed exactly rather than as sections. `/reset-password` carries its token
+   * in the query string, not the path, so it needs no children — and a section
+   * entry would make anything beginning with those characters public too, which
+   * is the mistake rule 1 above is about.
+   *
+   * Note what is NOT here: `/change-password`. That one requires a session by
+   * design — it asks for the password you currently have.
+   */
+  '/forgot-password',
+  '/reset-password',
+];
 
 /** Build output and icons, matched loosely because they carry file extensions. */
 export const ASSET_PREFIXES = ['/_next', '/favicon', '/icon', '/apple-icon', '/manifest'];

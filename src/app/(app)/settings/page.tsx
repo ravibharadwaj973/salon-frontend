@@ -12,6 +12,7 @@ import { ReviewQrCard } from './review-qr-card';
 import { BookingEmbedCard } from './booking-embed-card';
 import { BookingCapacityCard } from './booking-capacity-card';
 import { UserPermissionsButton } from './user-permissions-button';
+import { ResetPasswordButton } from './reset-password-button';
 import { date, fromNow, phone as formatPhone } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/permissions';
 import { bookingPageUrl, embedScriptUrl } from '@/lib/public-urls';
@@ -66,6 +67,17 @@ interface TeamMember {
   branches: { branch: BranchSummary }[];
 }
 
+interface PasswordRequest {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  requestedAt: string;
+  /** Nobody in this salon can resolve it — it is the only owner. */
+  needsSupport: boolean;
+}
+
 const TABS = [
   { key: 'salon', label: 'Salon' },
   { key: 'branches', label: 'Branches' },
@@ -81,15 +93,35 @@ export default async function SettingsPage({
   const params = await searchParams;
   const tab = TABS.find((item) => item.key === params.tab)?.key ?? 'salon';
 
-  const [tenant, branches, team, user, layouts] = await Promise.all([
+  const [tenant, branches, team, user, layouts, passwordRequests] = await Promise.all([
     apiFetchSafe<Tenant>('/tenant', { noBranch: true }),
     apiFetchList<Branch>('/branches', { query: { pageSize: 50 } }).catch(() => null),
     apiFetchList<TeamMember>('/users', { query: { pageSize: 50 } }).catch(() => null),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
     tab === 'profile' ? apiFetchSafe<PageLayout[]>('/layouts', { noBranch: true }) : Promise.resolve(null),
+    /**
+     * Who has said they cannot get in.
+     *
+     * Fetched only on the tab that can act on it, and allowed to fail quietly —
+     * the endpoint is behind a permission this user may not have, and a Team tab
+     * that refuses to render because a side panel 403'd would be a worse bug
+     * than the one this feature fixes.
+     */
+    tab === 'team'
+      ? apiFetchSafe<PasswordRequest[]>('/users/password-requests', { noBranch: true })
+      : Promise.resolve(null),
   ]);
 
   const canManageUsers = user?.permissions.includes('user.manage') ?? false;
+  /**
+   * Resetting is its own permission, deliberately wider than user.manage.
+   *
+   * A manager needs to get somebody back into the till without also being able
+   * to create accounts and hand out permissions. Who they may actually reset is
+   * decided by the server, per pair, by comparing what the two people can do —
+   * so this only governs whether the button is drawn.
+   */
+  const canResetPasswords = user?.permissions.includes('user.reset_password') ?? false;
   const canManageBranches = user?.permissions.includes('branch.manage') ?? false;
   /**
    * The saved wording, with the app's defaults underneath.
@@ -293,6 +325,39 @@ export default async function SettingsPage({
             subtitle="What each person can see and do is decided by their role"
             action={canManageUsers ? <NewUserButton branches={user?.branches ?? []} /> : null}
           />
+          {/**
+            * WHO IS WAITING, AT THE TOP OF THE SCREEN THAT CAN HELP THEM.
+            *
+            * Without this the request goes nowhere a person looks: somebody
+            * presses "cannot sign in" on the login page, a row appears in a
+            * table nobody opens, and they end up ringing the owner anyway —
+            * which is the outcome the form was meant to save them from.
+            */}
+          {passwordRequests && passwordRequests.length > 0 ? (
+            <div className="border-b border-stone-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-medium text-amber-900">
+                {passwordRequests.length === 1
+                  ? 'Somebody cannot sign in'
+                  : `${passwordRequests.length} people cannot sign in`}
+              </p>
+              <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-amber-900/90">
+                {passwordRequests.map((request) => (
+                  <li key={request.id}>
+                    <span className="font-medium">{request.name}</span> asked {fromNow(request.requestedAt)}
+                    {request.needsSupport ? (
+                      /* The one case nobody here can fix. Said plainly, so a
+                         manager does not spend the morning looking for a button
+                         that is correctly refusing them. */
+                      <> — this is the salon’s only owner, so support has to do it. They will be emailed a link.</>
+                    ) : (
+                      <> — use Reset password on their row below.</>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {!team || team.data.length === 0 ? (
             <EmptyState icon={Users} title="No team logins yet" description="Add a login for each person who uses the software." />
           ) : (
@@ -305,7 +370,7 @@ export default async function SettingsPage({
                   <TH>Branches</TH>
                   <TH>Last signed in</TH>
                   <TH>Status</TH>
-                  {canManageUsers ? <TH align="right">&nbsp;</TH> : null}
+                  {canManageUsers || canResetPasswords ? <TH align="right">&nbsp;</TH> : null}
                 </TR>
               </THead>
               <TBody>
@@ -332,9 +397,19 @@ export default async function SettingsPage({
                       {member.lastLoginAt ? fromNow(member.lastLoginAt) : 'never'}
                     </TD>
                     <TD>{member.isActive ? <Badge tone="success">Active</Badge> : <Badge>Disabled</Badge>}</TD>
-                    {canManageUsers ? (
+                    {canManageUsers || canResetPasswords ? (
                       <TD align="right">
-                        <UserPermissionsButton userId={member.id} name={member.name} role={member.role} />
+                        <span className="flex items-center justify-end gap-2">
+                          {/* Only for accounts that are switched on. Resetting a
+                              disabled login produces a password that cannot sign
+                              in, which reads as the reset having failed. */}
+                          {canResetPasswords && member.isActive ? (
+                            <ResetPasswordButton userId={member.id} name={member.name} />
+                          ) : null}
+                          {canManageUsers ? (
+                            <UserPermissionsButton userId={member.id} name={member.name} role={member.role} />
+                          ) : null}
+                        </span>
                       </TD>
                     ) : null}
                   </TR>

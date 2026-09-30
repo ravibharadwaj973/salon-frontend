@@ -159,3 +159,51 @@ describe('build output and icons', () => {
     }
   });
 });
+
+/**
+ * THE RECOVERY PAGES, AND THE ONE THAT MUST NOT JOIN THEM.
+ *
+ * Two of these three screens are opened by somebody who cannot sign in. Putting
+ * them behind the session check would mean the only way to recover an account is
+ * to already have access to it — a circle nobody gets out of, and the exact
+ * shape of failure 2 above.
+ *
+ * The third is the trap. `/change-password` looks like it belongs with them and
+ * does not: it asks for the password you currently have, so it needs a session.
+ * Public, it would be a screen anybody could open — harmless on its own, but the
+ * kind of drift that ends with a section entry and every sibling let through
+ * with it.
+ */
+describe('getting back into a locked-out account', () => {
+  it('lets somebody with no session ask for a reset', () => {
+    expect(isPublic('/forgot-password')).toBe(true);
+  });
+
+  it('lets somebody open a reset link from their email', () => {
+    expect(isPublic('/reset-password')).toBe(true);
+  });
+
+  it('keeps the query string irrelevant to the decision', () => {
+    // The token travels in the query string, which never reaches this function.
+    // Worth pinning: a future entry matched on the full URL would break the link.
+    expect(isPublic('/reset-password')).toBe(true);
+  });
+
+  it('still requires a session to change a password you know', () => {
+    expect(isPublic('/change-password')).toBe(false);
+  });
+
+  it('does not let a section entry leak a sibling', () => {
+    // These are exact entries, not sections. If somebody converts them to
+    // sections later, this is what fails.
+    expect(isPublic('/forgot-password-admin')).toBe(false);
+    expect(isPublic('/reset-passwords')).toBe(false);
+  });
+
+  it('posts the two unauthenticated calls through the public proxy', () => {
+    // Both forms POST to the API through /api/proxy. Neither can carry a cookie,
+    // so both must be reachable — this is failure 3 from the top of the file,
+    // which broke online booking for every customer and nobody noticed.
+    expect(isPublic('/api/proxy/public/anything')).toBe(true);
+  });
+});

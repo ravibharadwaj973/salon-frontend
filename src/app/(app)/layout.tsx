@@ -17,6 +17,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/login');
   }
 
+  /**
+   * A TEMPORARY PASSWORD OPENS ONE SCREEN, AND THIS IS NOT IT.
+   *
+   * Somebody signed in with a password their manager chose for them is sent to
+   * choose their own before anything else loads. Every other endpoint refuses
+   * them anyway — the API enforces the same flag — so without this redirect they
+   * would meet the app as a wall of failed panels and no explanation.
+   *
+   * The redirect is the courtesy; the API is the rule. A guard that lived only
+   * here would be a suggestion, skippable by anyone who has opened developer
+   * tools once.
+   */
+  if (user.mustChangePassword) redirect('/change-password');
+
   // `unreadOnly` + pageSize 1 makes meta.total the unread count without
   // dragging the whole alert list into the shell.
   const [branchId, alerts] = await Promise.all([

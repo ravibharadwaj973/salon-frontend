@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -123,8 +124,13 @@ export function LoginForm() {
         Sign in
       </Button>
 
+      {/* Was a sentence with nowhere to go. The advice was right — a colleague
+          IS the fastest way back in — but somebody who has no colleague to hand,
+          or who is the owner, was left with a dead end. */}
       <p className="text-center text-xs text-ink-subtle">
-        Forgotten your password? Ask your salon owner to reset it.
+        <Link href="/forgot-password" className="underline underline-offset-2 hover:text-ink">
+          Cannot sign in?
+        </Link>
       </p>
     </form>
   );
