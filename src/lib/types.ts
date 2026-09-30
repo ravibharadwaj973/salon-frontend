@@ -1141,6 +1141,35 @@ export interface UsageSummary {
   meters: MeterSummary[];
 }
 
+/**
+ * One month of sending, as the history endpoint returns it.
+ *
+ * `included` is null for a month nothing was sent in: a usage row is only
+ * created on the first send, and printing today's allowance against a month the
+ * salon may have been on a different plan for would be inventing history.
+ */
+export interface MonthMeterUsage {
+  meter: MeterKey;
+  label: string;
+  included: number | null;
+  used: number;
+  blocked: number;
+}
+
+export interface MonthUsage {
+  periodStart: string;
+  label: string;
+  meters: MonthMeterUsage[];
+  used: number;
+  blocked: number;
+  /**
+   * Money paid for EXTRA messaging that month — top-ups, not the plan fee.
+   * The subscription buys the whole product, so folding it in here would tell
+   * an owner their reminders cost what the software costs.
+   */
+  toppedUp: { amount: number; messages: number };
+}
+
 export interface LimitCheck {
   allowed: boolean;
   limit: number;

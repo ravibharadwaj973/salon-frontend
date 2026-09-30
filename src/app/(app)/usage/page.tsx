@@ -2,21 +2,47 @@ import type { Metadata } from 'next';
 import { AlertTriangle, CheckCircle2, PauseCircle } from 'lucide-react';
 import { apiFetch, apiFetchSafe } from '@/lib/api';
 import { Card, CardBody, CardHeader, PageHeader, StatTile } from '@/components/ui/display';
+import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { count, money } from '@/lib/format';
-import { FAIR_USE_UNLIMITED, type AddOnPack, type LimitsSummary, type UsageSummary } from '@/lib/types';
+import { FAIR_USE_UNLIMITED, type AddOnPack, type LimitsSummary, type MonthUsage, type UsageSummary } from '@/lib/types';
+import { UsageChart } from './usage-chart';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'Usage' };
 
+/**
+ * The five meters as table columns, in cost order rather than alphabetical.
+ *
+ * Short headings because eight columns of full labels push the table wider than
+ * any laptop. The full names are on the card above, where there is room.
+ */
+const METER_COLUMNS = [
+  { meter: 'WA_UTILITY', short: 'WA utility' },
+  { meter: 'WA_MARKETING', short: 'WA marketing' },
+  { meter: 'WA_AUTHENTICATION', short: 'WA auth' },
+  { meter: 'SMS', short: 'SMS' },
+  { meter: 'EMAIL', short: 'Email' },
+] as const;
+
 const limitLabel = (n: number) => (n >= FAIR_USE_UNLIMITED ? 'Unlimited' : count(n));
 
 export default async function UsagePage() {
-  const [usage, limits, packs] = await Promise.all([
+  const [usage, limits, packs, history] = await Promise.all([
     apiFetch<UsageSummary>('/usage'),
     apiFetchSafe<LimitsSummary>('/usage/limits'),
     apiFetchSafe<AddOnPack[]>('/usage/packs'),
+    /**
+     * Allowed to fail quietly. The month you are standing in is the part of
+     * this screen somebody opened it for; a year of history failing to load
+     * must not take the "can I send today" answer down with it.
+     */
+    apiFetchSafe<MonthUsage[]>('/usage/history', { query: { months: 12 } }),
   ]);
+
+  /** Totals across the whole window, for the one line under the heading. */
+  const windowTotal = (history ?? []).reduce((sum, month) => sum + month.used, 0);
+  const windowPaid = (history ?? []).reduce((sum, month) => sum + month.toppedUp.amount, 0);
 
   const anyBlocked = usage.meters.some((m) => m.blocked > 0);
   const anyLow = usage.meters.some((m) => m.included > 0 && m.available > 0 && m.percentUsed >= 80);
@@ -129,6 +155,110 @@ export default async function UsagePage() {
           ) : null}
         </CardBody>
       </Card>
+
+      {/**
+        * MONTH BY MONTH.
+        *
+        * The card above answers "can I send today". This answers the questions
+        * an owner actually arrives with: is this a heavy month, has marketing
+        * crept up since Diwali, and how many times this year did we have to buy
+        * more. None of those can be answered by the month you are standing in.
+        */}
+      {history && history.length > 0 ? (
+        <Card className="mt-5">
+          <CardHeader
+            title="Month by month"
+            subtitle={`The last ${history.length} months · ${count(windowTotal)} messages sent${
+              windowPaid > 0 ? ` · ${money(windowPaid)} spent on top-ups` : ''
+            }`}
+          />
+
+          <UsageChart history={history} />
+
+          {/**
+            * The exact figures, because the chart is deliberately three series
+            * and the cost split is five. It is also the reading of last resort:
+            * one of the series colours sits just under the contrast threshold
+            * against white, so no number on this screen is available only as a
+            * colour.
+            *
+            * Scrolls sideways rather than wrapping — eight columns of digits
+            * that reflow become unreadable on a phone, where a scroll is
+            * understood.
+            */}
+          <div className="overflow-x-auto border-t border-stone-200">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Month</TH>
+                  {METER_COLUMNS.map((column) => (
+                    <TH key={column.meter} align="right">
+                      {column.short}
+                    </TH>
+                  ))}
+                  <TH align="right">Total</TH>
+                  <TH align="right">Top-ups paid</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {history.map((month) => (
+                  <TR key={month.periodStart}>
+                    <TD className="whitespace-nowrap font-medium text-ink">{month.label}</TD>
+
+                    {METER_COLUMNS.map((column) => {
+                      const meter = month.meters.find((m) => m.meter === column.meter);
+                      const used = meter?.used ?? 0;
+                      return (
+                        <TD key={column.meter} align="right" className="tnum text-ink-muted">
+                          {/* A dash, not a zero, when nothing was sent. Twelve
+                              rows of 0 read as data; twelve dashes read as
+                              "nothing happened here", which is the truth. */}
+                          {used > 0 ? count(used) : <span className="text-ink-subtle">—</span>}
+                          {meter && meter.blocked > 0 ? (
+                            <span className="block text-2xs font-medium text-rose-600">
+                              {count(meter.blocked)} not sent
+                            </span>
+                          ) : null}
+                        </TD>
+                      );
+                    })}
+
+                    <TD align="right" className="tnum font-medium text-ink">
+                      {month.used > 0 ? count(month.used) : <span className="text-ink-subtle">—</span>}
+                    </TD>
+
+                    <TD align="right" className="tnum text-ink-muted">
+                      {month.toppedUp.amount > 0 ? (
+                        <>
+                          <span className="font-medium text-ink">{money(month.toppedUp.amount)}</span>
+                          <span className="block text-2xs text-ink-subtle">
+                            {count(month.toppedUp.messages)} messages
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-ink-subtle">—</span>
+                      )}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+
+          {/**
+            * Said plainly, because the obvious reading of a "spent" column on a
+            * messaging screen is "this is what messaging costs me", and that is
+            * not what the number is. There is no per-message charge on a plan
+            * allowance, and inventing one to fill this column would be making
+            * up the most important figure on the page.
+            */}
+          <p className="border-t border-stone-200 px-5 py-3 text-xs leading-relaxed text-ink-muted">
+            <strong className="font-medium text-ink">Top-ups paid</strong> is money spent on extra messages after an
+            allowance ran out. Your plan fee is separate and covers the whole app, not just messaging — messages inside
+            your monthly allowance cost nothing extra.
+          </p>
+        </Card>
+      ) : null}
 
       {limits ? (
         <section className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
