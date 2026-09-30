@@ -8,6 +8,18 @@ import { useDebounced } from '@/lib/use-debounced';
 const TIERS = ['BRONZE', 'SILVER', 'GOLD', 'VIP'] as const;
 
 /**
+ * What counts as lapsed, in one place.
+ *
+ * The number was written three times — in the label on the checkbox, in the
+ * cutoff the page sends, and nowhere at all in the CSV export, which is how the
+ * export came to disagree with the screen it was exported from. Declared here
+ * because the label that promises it lives here.
+ */
+export const LAPSED_DAYS = 45;
+export const lapsedCutoff = () =>
+  new Date(Date.now() - LAPSED_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+/**
  * The filter bar, without an Apply button.
  *
  * Typing a name or a number narrows the list as you go — the search is
@@ -92,6 +104,44 @@ export function CustomerFilters({
     startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
   }
 
+  /**
+   * BACK TO THE WHOLE BOOK, IN ONE PLACE.
+   *
+   * The small × inside the box only ever cleared the text, and it cleared it
+   * into a state the page had not caught up with yet. Meanwhile a tier or the
+   * lapsed checkbox stayed on, invisibly, and the list that came back looked
+   * like a search that had found nothing rather than a filter still running.
+   *
+   * This resets every one of them at once and navigates immediately, so "clear"
+   * means the page you would have got by arriving fresh. `applied` is set by
+   * hand because the debounce has not run yet — without it the effect above
+   * would see a change it did not make and fire a second, identical navigation.
+   */
+  const anyFilter = Boolean(text.trim() || q || tier || lapsed);
+
+  function clearAll() {
+    setText('');
+    applied.current = '';
+    startTransition(() => router.replace(pathname, { scroll: false }));
+  }
+
+  /**
+   * The export follows the screen.
+   *
+   * It carried `q` and nothing else, so a list narrowed to Gold members or to
+   * lapsed customers exported as the entire book — the same filename, a
+   * plausible-looking file, and the wrong people in it. A CSV that silently
+   * disagrees with the list it came from is worse than no CSV.
+   */
+  const exportQuery = new URLSearchParams();
+  if (q) exportQuery.set('q', q);
+  if (tier) exportQuery.set('tier', tier);
+  if (lapsed) {
+    exportQuery.set('lastVisitBefore', lapsedCutoff());
+    exportQuery.set('minVisits', '1');
+  }
+  const exportHref = `/api/proxy/customers/export${exportQuery.toString() ? `?${exportQuery}` : ''}`;
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 p-3">
       <div className="relative min-w-[220px] flex-1">
@@ -110,8 +160,20 @@ export function CustomerFilters({
           {text ? (
             <button
               type="button"
-              onClick={() => setText('')}
-              aria-label="Clear search"
+              /**
+               * Empties the box AND asks for the result, rather than emptying
+               * the box and waiting 300ms for the debounce to notice. Clicking
+               * an × is a decision already made; making somebody watch the old
+               * results sit there afterwards reads as the button not working.
+               * The tier and the lapsed toggle are deliberately left alone —
+               * this is the text's ×, and Clear beside it is the whole reset.
+               */
+              onClick={() => {
+                setText('');
+                applied.current = '';
+                navigate({ q: '' });
+              }}
+              aria-label="Clear search text"
               className="rounded p-0.5 text-ink-subtle hover:bg-stone-100 hover:text-ink"
             >
               <X className="h-3.5 w-3.5" />
@@ -142,11 +204,25 @@ export function CustomerFilters({
           onChange={(event) => navigate({ lapsed: event.target.checked })}
           className="h-3.5 w-3.5 rounded border-stone-300 text-brand-600"
         />
-        Lapsed 45+ days
+        Lapsed {LAPSED_DAYS}+ days
       </label>
 
+      {/* Only when there is something to clear. A permanently visible Clear on
+          an unfiltered list is a button that does nothing, and people learn to
+          stop believing buttons like that. */}
+      {anyFilter ? (
+        <button
+          type="button"
+          onClick={clearAll}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-sm text-ink-muted shadow-sm hover:bg-stone-50 hover:text-ink"
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear
+        </button>
+      ) : null}
+
       <a
-        href={`/api/proxy/customers/export${q ? `?q=${encodeURIComponent(q)}` : ''}`}
+        href={exportHref}
         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-sm text-ink shadow-sm hover:bg-stone-50"
       >
         <Download className="h-3.5 w-3.5" />

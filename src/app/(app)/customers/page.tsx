@@ -1,14 +1,14 @@
 import { PermissionGate } from '@/components/permission-gate';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Upload, UserPlus, Users } from 'lucide-react';
+import { Upload, UserPlus, Users, X } from 'lucide-react';
 import { apiFetchListAllowed } from '@/lib/api';
 import { Card, EmptyState, PageHeader, StatusBadge, Avatar } from '@/components/ui/display';
 import { ButtonLink } from '@/components/ui/button';
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { fromNow, fullName, money, phone as formatPhone } from '@/lib/format';
 import { NewCustomerButton } from './new-customer-button';
-import { CustomerFilters } from './customer-filters';
+import { CustomerFilters, lapsedCutoff } from './customer-filters';
 import type { Customer } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Customers' };
@@ -22,8 +22,9 @@ export default async function CustomersPage({
   const params = await searchParams;
   const page = Number(params.page ?? 1);
 
-  // "Lapsed" is the win-back working list: 45+ days since the last visit.
-  const lapsedCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+  // "Lapsed" is the win-back working list. The number of days lives beside the
+  // label that promises it, so the list, the label and the CSV cannot disagree.
+  const cutoff = lapsedCutoff();
 
   const result = await apiFetchListAllowed<Customer>('/customers', {
     query: {
@@ -33,7 +34,7 @@ export default async function CustomersPage({
       pageSize: 25,
       sortBy: params.sortBy ?? (params.lapsed === 'true' ? 'totalSpent' : 'createdAt'),
       sortDir: 'desc',
-      ...(params.lapsed === 'true' ? { lastVisitBefore: lapsedCutoff, minVisits: 1 } : {}),
+      ...(params.lapsed === 'true' ? { lastVisitBefore: cutoff, minVisits: 1 } : {}),
     },
   });
 
@@ -42,6 +43,10 @@ export default async function CustomersPage({
   }
 
   const { data: customers, meta } = result;
+
+  // A search, a tier or the lapsed toggle — any of them means this is a
+  // filtered view rather than the whole book, and the empty state must say so.
+  const filtered = Boolean(params.q || params.tier || params.lapsed === 'true');
 
   return (
     <>
@@ -63,19 +68,36 @@ export default async function CustomersPage({
         <CustomerFilters q={params.q ?? ''} tier={params.tier ?? ''} lapsed={params.lapsed === 'true'} />
 
         {customers.length === 0 ? (
+          /**
+           * AN EMPTY RESULT WITH A FILTER ON IS NOT AN EMPTY BOOK.
+           *
+           * "No customer matches that" was shown whether the search had found
+           * nothing or a tier and the lapsed checkbox were quietly excluding
+           * everyone — and the only thing offered either way was Import, which
+           * for somebody who already has ten thousand customers reads as the app
+           * having lost them. Say which filters are running, and give the way
+           * back out as the action.
+           */
           <EmptyState
             icon={Users}
-            title={params.q ? 'No customer matches that' : 'No customers yet'}
+            title={filtered ? 'Nothing matches those filters' : 'No customers yet'}
             description={
-              params.q
-                ? 'Try a phone number instead — it is the most reliable way to find someone.'
+              filtered
+                ? `Nobody in the book matches ${describeFilters(params)}. Searching covers every branch you can see, so a customer registered at another shop will still turn up here.`
                 : 'Add your first customer, or import your existing book from a CSV.'
             }
             action={
-              <ButtonLink href="/customers/import" variant="secondary" size="sm">
-                <Upload className="h-3.5 w-3.5" />
-                Import customers
-              </ButtonLink>
+              filtered ? (
+                <ButtonLink href="/customers" variant="secondary" size="sm">
+                  <X className="h-3.5 w-3.5" />
+                  Clear filters
+                </ButtonLink>
+              ) : (
+                <ButtonLink href="/customers/import" variant="secondary" size="sm">
+                  <Upload className="h-3.5 w-3.5" />
+                  Import customers
+                </ButtonLink>
+              )
             }
           />
         ) : (
@@ -152,4 +174,20 @@ export default async function CustomersPage({
       ) : null}
     </>
   );
+}
+
+/**
+ * The running filters, in the words on the screen.
+ *
+ * Named rather than counted: "2 filters" tells somebody there is a problem
+ * without telling them where it is, and the tier select in particular is easy
+ * to leave set and never look at again.
+ */
+function describeFilters(params: { q?: string; tier?: string; lapsed?: string }): string {
+  const parts: string[] = [];
+  if (params.q) parts.push(`“${params.q}”`);
+  if (params.tier) parts.push(`${params.tier[0]}${params.tier.slice(1).toLowerCase()} tier`);
+  if (params.lapsed === 'true') parts.push('lapsed');
+  if (parts.length <= 1) return parts[0] ?? 'those filters';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
