@@ -4,20 +4,12 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Download, Loader2, Search, X } from 'lucide-react';
 import { useDebounced } from '@/lib/use-debounced';
+// A plain module on purpose — the server page needs these too, and an export
+// of a 'use client' file cannot be called from the server. See lapsed.ts.
+import { LAPSED_DAYS, lapsedCutoff } from './lapsed';
 
 const TIERS = ['BRONZE', 'SILVER', 'GOLD', 'VIP'] as const;
 
-/**
- * What counts as lapsed, in one place.
- *
- * The number was written three times — in the label on the checkbox, in the
- * cutoff the page sends, and nowhere at all in the CSV export, which is how the
- * export came to disagree with the screen it was exported from. Declared here
- * because the label that promises it lives here.
- */
-export const LAPSED_DAYS = 45;
-export const lapsedCutoff = () =>
-  new Date(Date.now() - LAPSED_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
 /**
  * The filter bar, without an Apply button.

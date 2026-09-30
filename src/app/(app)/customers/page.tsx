@@ -8,7 +8,8 @@ import { ButtonLink } from '@/components/ui/button';
 import { Pagination, TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { fromNow, fullName, money, phone as formatPhone } from '@/lib/format';
 import { NewCustomerButton } from './new-customer-button';
-import { CustomerFilters, lapsedCutoff } from './customer-filters';
+import { CustomerFilters } from './customer-filters';
+import { lapsedCutoff } from './lapsed';
 import type { Customer } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Customers' };
