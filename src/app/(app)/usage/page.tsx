@@ -21,6 +21,7 @@ const METER_COLUMNS = [
   { meter: 'WA_UTILITY', short: 'WA utility' },
   { meter: 'WA_MARKETING', short: 'WA marketing' },
   { meter: 'WA_AUTHENTICATION', short: 'WA auth' },
+  { meter: 'WA_SERVICE', short: 'WA replies' },
   { meter: 'SMS', short: 'SMS' },
   { meter: 'EMAIL', short: 'Email' },
 ] as const;
@@ -114,7 +115,7 @@ export default async function UsagePage() {
       <Card>
         <CardHeader
           title="Messages"
-          subtitle="WhatsApp utility covers confirmations, reminders and bills. Marketing covers offers and win-back campaigns."
+          subtitle="Utility covers confirmations, reminders and bills. Marketing covers offers and win-back campaigns. Replies are what the assistant and your team send back to customers who message you — those never stop, even if the allowance runs out."
         />
         <CardBody className="space-y-5">
           {usage.meters

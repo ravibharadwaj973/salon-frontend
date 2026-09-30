@@ -1113,7 +1113,20 @@ export interface StaffLeaderboardRow {
 
 // ------------------------------------------------- plan usage & allowances --
 
-export type MeterKey = 'WA_UTILITY' | 'WA_MARKETING' | 'WA_AUTHENTICATION' | 'SMS' | 'EMAIL';
+/**
+ * `WA_SERVICE` is a reply to a customer who wrote first — the assistant, or a
+ * person in the inbox. Its own meter rather than part of utility, because the
+ * salon needs to see what answering customers costs separately from what
+ * contacting them costs, and because neither should be able to exhaust the
+ * other. It is also the one meter that never stops a send.
+ */
+export type MeterKey =
+  | 'WA_UTILITY'
+  | 'WA_MARKETING'
+  | 'WA_AUTHENTICATION'
+  | 'WA_SERVICE'
+  | 'SMS'
+  | 'EMAIL';
 
 export interface MeterSummary {
   meter: MeterKey;
