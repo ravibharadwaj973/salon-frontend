@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { apiFetch, apiFetchList, apiFetchSafe } from '@/lib/api';
 import { PageHeader } from '@/components/ui/display';
 import { PosTerminal } from './pos-terminal';
-import type { Appointment, BillingDefaults, MembershipPlan, Product, Service, SessionUser, Staff } from '@/lib/types';
+import type { Appointment, BillingDefaults, MembershipPlan, PackageTemplate, Product, Service, SessionUser, Staff } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'New bill' };
 export const dynamic = 'force-dynamic';
@@ -14,12 +14,16 @@ export default async function PosPage({
 }) {
   const params = await searchParams;
 
-  const [user, serviceGroups, products, membershipPlans, staff, appointment, billing] = await Promise.all([
+  const [user, serviceGroups, products, membershipPlans, packageTemplates, staff, appointment, billing] = await Promise.all([
     apiFetch<SessionUser>('/auth/me', { noBranch: true }),
     apiFetchSafe<{ id: string; name: string; services: Service[] }[]>('/services/menu'),
     apiFetchList<Product>('/inventory/products', { query: { isRetail: 'true', pageSize: 100 } }).catch(() => null),
     // Plans on a feature the salon's plan does not include come back as a 403 → null → no tab.
     apiFetchSafe<MembershipPlan[]>('/memberships/plans', { query: { activeOnly: 'true' } }),
+    // Packages the salon sells. Same 403 → null → no tab, and the contents come
+    // with each one: what is in a package is the product, and the person selling
+    // it should not have to remember.
+    apiFetchSafe<PackageTemplate[]>('/packages', { query: { activeOnly: 'true' } }),
     apiFetchList<Staff>('/staff', { query: { isActive: 'true', pageSize: 100 } }).catch(() => null),
     params.appointmentId
       ? apiFetchSafe<Appointment>(`/appointments/${params.appointmentId}`)
@@ -37,6 +41,7 @@ export default async function PosPage({
         serviceGroups={serviceGroups ?? []}
         products={products?.data ?? []}
         membershipPlans={membershipPlans ?? []}
+        packageTemplates={packageTemplates ?? []}
         staff={staff?.data ?? []}
         appointment={appointment}
         initialCustomerId={params.customerId ?? appointment?.customerId ?? null}

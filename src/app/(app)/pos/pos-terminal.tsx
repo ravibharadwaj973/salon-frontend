@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Gift,
+  AlertCircle,
+  Check,
   Heart,
   Info,
   Minus,
+  Package,
   Plus,
   Search,
   Star,
+  Ticket,
   Trash2,
   UserRound,
   Wallet,
@@ -24,7 +27,9 @@ import { Avatar, Badge, Card, CardBody, CardHeader } from '@/components/ui/displ
 import { Field, Input, Select } from '@/components/ui/form';
 import { useToast } from '@/components/ui/overlay';
 import { fullName, money, moneyExact, phone as formatPhone } from '@/lib/format';
-import type { Appointment, BillingDefaults, Customer, Invoice, MembershipPlan, PaymentMode, PosContext, Product, Service, Staff } from '@/lib/types';
+import type { Appointment, BillingDefaults, Customer, Invoice, MembershipPlan, PackageTemplate, PaymentMode, PosContext, Product, Service, Staff } from '@/lib/types';
+import { coverFor, overchargedLines, packageCredit } from './package-matching';
+import { PackageCatalogue, PackageHoldings } from './pos-packages';
 
 /**
  * Every payment mode here is a *record* of money already taken at the counter.
@@ -42,7 +47,7 @@ const PAYMENT_MODES: { value: PaymentMode; label: string; hint?: string }[] = [
 
 interface CartLine {
   key: string;
-  itemType: 'SERVICE' | 'PRODUCT' | 'MEMBERSHIP';
+  itemType: 'SERVICE' | 'PRODUCT' | 'MEMBERSHIP' | 'PACKAGE';
   refId: string;
   name: string;
   quantity: number;
@@ -62,10 +67,24 @@ interface PaymentLine {
   reference: string;
 }
 
+/** What the API says about a discount code, checked against this bill. */
+interface CouponCheck {
+  code: string;
+  description: string | null;
+  discountType: 'PERCENT' | 'FLAT';
+  value: string | number;
+  maxDiscount: string | number | null;
+  minBillAmount: string | number;
+  validTo: string;
+  appliesTo: string | number;
+  discount: string | number;
+}
+
 export function PosTerminal({
   serviceGroups,
   products,
   membershipPlans,
+  packageTemplates,
   staff,
   appointment,
   initialCustomerId,
@@ -75,6 +94,7 @@ export function PosTerminal({
   serviceGroups: { id: string; name: string; services: Service[] }[];
   products: Product[];
   membershipPlans: MembershipPlan[];
+  packageTemplates: PackageTemplate[];
   staff: Staff[];
   appointment: Appointment | null;
   initialCustomerId: string | null;
@@ -87,7 +107,7 @@ export function PosTerminal({
   const [customerId, setCustomerId] = useState<string | null>(initialCustomerId);
   const [search, setSearch] = useState('');
   const [catalogueSearch, setCatalogueSearch] = useState('');
-  const [tab, setTab] = useState<'services' | 'products' | 'memberships'>('services');
+  const [tab, setTab] = useState<'services' | 'products' | 'packages' | 'memberships'>('services');
   /**
    * GST on this bill. Starts from the salon default; the front desk may flip it
    * per bill when they hold invoice.gst_choice, and never to "on" without a
@@ -141,15 +161,92 @@ export function PosTerminal({
     enabled: Boolean(customerId),
   });
 
-  // ------------------------------------------------------------- totals ---
-  const totals = useMemo(() => {
+  /**
+   * The two figures a coupon is judged against, worked out before it is checked.
+   *
+   * Split out of `totals` only because of the order things have to happen in: the
+   * coupon's worth depends on the subtotal, and the total depends on the coupon's
+   * worth. Computing these first breaks the circle without either one guessing at
+   * the other.
+   */
+  const basis = useMemo(() => {
     const subtotal = lines.reduce((sum, line) => sum + Math.max(0, line.unitPrice * line.quantity - line.discount), 0);
-    const billDiscount =
+    const manual =
       billDiscountValue > 0
         ? billDiscountType === 'PERCENT'
           ? Math.min((subtotal * billDiscountValue) / 100, subtotal)
           : Math.min(billDiscountValue, subtotal)
         : 0;
+    return { subtotal, manual };
+  }, [lines, billDiscountType, billDiscountValue]);
+
+  /**
+   * WHAT IS LEFT OF THE CUSTOMER'S PACKAGES, THIS BILL INCLUDED.
+   *
+   * Recomputed from the cart on every change rather than held as state, because
+   * the only honest answer to "how many facials are left" counts the ones already
+   * sitting in front of you. The arithmetic is in ./package-matching, where it is
+   * tested.
+   */
+  const credit = useMemo(() => packageCredit(context?.packages ?? [], lines), [context, lines]);
+
+  /**
+   * Services in the cart being charged for that the customer has already bought.
+   *
+   * It happens because of the order people work in: the catalogue is right there,
+   * so services go in before the customer is attached, and by the time the
+   * packages are known the lines are already priced. The till will not rewrite
+   * them by itself — a total that changes under somebody's hands mid-bill is
+   * worse than one that is simply too high, because at least the high one is
+   * visible — so it says so and offers the fix on a click.
+   */
+  const overcharged = useMemo(() => overchargedLines(context?.packages ?? [], lines), [context, lines]);
+
+  /**
+   * IS THIS DISCOUNT CODE ANY GOOD, AND WHAT IS IT WORTH HERE?
+   *
+   * Checked against the API rather than worked out locally. The rules — expiry,
+   * usage limits, per-customer limits, a minimum bill, a cap on the discount —
+   * live on the server and are enforced there when the bill is saved, so a second
+   * copy of them in the browser would only ever be a copy that disagreed.
+   *
+   * Re-checked whenever the bill changes, which is the point: a code that needs a
+   * ₹2,000 minimum says so at ₹1,800 and goes green when the next service is
+   * added, instead of failing the whole save at the end.
+   */
+  const couponQuery = useQuery({
+    queryKey: ['pos-coupon', couponCode.trim(), basis.subtotal, basis.manual, customerId],
+    queryFn: () =>
+      apiPost<CouponCheck>('invoices/validate-coupon', {
+        code: couponCode.trim(),
+        subtotal: basis.subtotal,
+        billDiscount: basis.manual,
+        customerId: customerId ?? undefined,
+      }),
+    enabled: couponCode.trim().length >= 3 && lines.length > 0,
+    retry: false,
+    // Nothing here is worth re-fetching in the background mid-bill.
+    refetchOnWindowFocus: false,
+  });
+
+  /**
+   * Only a code the server has approved comes off the total, and only the amount
+   * the server said. Showing a discount the bill then refuses is how a customer
+   * ends up being quoted one figure and charged another.
+   */
+  const coupon = couponQuery.data ?? null;
+  const couponDiscount = coupon ? Number(coupon.discount) : 0;
+
+  // ------------------------------------------------------------- totals ---
+  const totals = useMemo(() => {
+    const { subtotal, manual: manualDiscount } = basis;
+    /**
+     * Manual discount and coupon, added and then clamped — the same order the API
+     * uses, so the figure on the screen is the figure on the bill. The coupon was
+     * already worked out against (subtotal − manual), which is why it is added
+     * rather than taken off the gross.
+     */
+    const billDiscount = Math.min(manualDiscount + couponDiscount, subtotal);
 
     const netTotal = Math.max(0, subtotal - billDiscount);
 
@@ -201,6 +298,12 @@ export function PosTerminal({
     return {
       subtotal,
       billDiscount,
+      manualDiscount: Math.min(manualDiscount, subtotal),
+      /** What the package covered, at what it would have cost. */
+      coveredValue: lines.reduce(
+        (sum, line) => (line.redeemFrom === 'NONE' ? sum : sum + line.listPrice * line.quantity),
+        0,
+      ),
       taxIncluded,
       taxAdded,
       taxRemoved,
@@ -213,14 +316,32 @@ export function PosTerminal({
       due: Math.max(0, grandTotal - paid),
       change: Math.max(0, paid - grandTotal),
     };
-  }, [lines, billDiscountType, billDiscountValue, context, pointsToRedeem, walletAmount, payments, gst, billing.pricesIncludeTax]);
+  }, [lines, basis, couponDiscount, context, pointsToRedeem, walletAmount, payments, gst, billing.pricesIncludeTax]);
 
   // --------------------------------------------------------------- cart ---
-  function addService(service: Service, redeem?: { from: 'PACKAGE' | 'MEMBERSHIP'; purchaseItemId?: string }) {
+  /**
+   * ADDING A SERVICE — AND MATCHING IT TO A PACKAGE IF IT IS ONE THEY OWN.
+   *
+   * The second argument is for the cases where the caller has already decided:
+   * the chips in the "already paid for" card, and the per-line toggles in the
+   * cart. Left off, this looks for itself, and that is what stops the commonest
+   * way a salon charges twice — the service is in a package, but it was added
+   * from the catalogue like anything else, so nobody noticed.
+   *
+   * Matching only ever makes a line CHEAPER, which is why it is safe to do
+   * without asking. The reverse — deciding on somebody's behalf to charge for
+   * something — is never automatic.
+   */
+  function addService(
+    service: Service,
+    redeem?: { from: 'PACKAGE' | 'MEMBERSHIP'; purchaseItemId?: string; packageName?: string },
+  ) {
+    const matched = redeem ?? matchToPackage(service.id);
+
     const memberPrice = context?.membership && service.memberPrice ? Number(service.memberPrice) : Number(service.price);
     const discountPct = context?.membership ? Number(context.membership.plan.serviceDiscountPct) : 0;
-    const price = redeem ? 0 : service.memberPrice && context?.membership ? memberPrice : Number(service.price);
-    const autoDiscount = redeem || (service.memberPrice && context?.membership) ? 0 : (price * discountPct) / 100;
+    const price = matched ? 0 : service.memberPrice && context?.membership ? memberPrice : Number(service.price);
+    const autoDiscount = matched || (service.memberPrice && context?.membership) ? 0 : (price * discountPct) / 100;
 
     setLines((current) => [
       ...current,
@@ -234,8 +355,122 @@ export function PosTerminal({
         listPrice: Number(service.price),
         discount: Math.round(autoDiscount * 100) / 100,
         taxRatePct: billing.defaultGstRate,
-        redeemFrom: redeem?.from ?? 'NONE',
-        packagePurchaseItemId: redeem?.purchaseItemId,
+        redeemFrom: matched?.from ?? 'NONE',
+        packagePurchaseItemId: matched?.purchaseItemId,
+      },
+    ]);
+
+    if (!redeem && matched) {
+      toast.success(`${service.name} covered by ${matched.packageName ?? 'their package'} — not charged`);
+    }
+  }
+
+  /**
+   * A package session free to spend on this service, or nothing.
+   *
+   * Read off the memo, which is one render behind if two chips are clicked
+   * inside the same frame. Left that way rather than defended here: the server
+   * counts the sessions again inside the invoice transaction and refuses with
+   * "Only 1 session(s) remain in this package", rolling the whole bill back. A
+   * second allocator in the browser to catch a double-click would be more code
+   * than the thing it guards and would be the copy that drifts.
+   */
+  function matchToPackage(serviceId: string) {
+    const cover = coverFor(credit, serviceId);
+    return cover
+      ? { from: 'PACKAGE' as const, purchaseItemId: cover.entitlement.purchaseItemId, packageName: cover.entitlement.packageName }
+      : null;
+  }
+
+  /**
+   * Charge for a line the package was covering.
+   *
+   * The session goes back to the customer's balance by itself — `credit` is
+   * derived from the cart, so dropping the redemption restores it. The menu price
+   * comes back from `listPrice`, which is held on every line for exactly this.
+   */
+  function chargeInstead(key: string) {
+    setLines((current) =>
+      current.map((line) =>
+        line.key === key
+          ? { ...line, redeemFrom: 'NONE' as const, packagePurchaseItemId: undefined, unitPrice: line.listPrice, discount: 0 }
+          : line,
+      ),
+    );
+  }
+
+  /** Take a charged line off the customer's package instead. */
+  function useOnePackage(key: string) {
+    const line = lines.find((candidate) => candidate.key === key);
+    if (!line) return;
+    const cover = coverFor(credit, line.refId, line.quantity);
+    if (!cover) return;
+    setLines((current) =>
+      current.map((candidate) =>
+        candidate.key === key
+          ? {
+              ...candidate,
+              redeemFrom: 'PACKAGE' as const,
+              packagePurchaseItemId: cover.entitlement.purchaseItemId,
+              unitPrice: 0,
+              discount: 0,
+            }
+          : candidate,
+      ),
+    );
+  }
+
+  /**
+   * Apply every match at once.
+   *
+   * Recomputed inside the updater rather than read from the memo above, so the
+   * allocation is made against the cart as it is at this instant — two facials in
+   * the cart with one session left must take one, not two.
+   */
+  function useAllPackages() {
+    setLines((current) => {
+      const byKey = new Map(
+        overchargedLines(context?.packages ?? [], current).map((match) => [
+          match.line.key,
+          match.credit.entitlement.purchaseItemId,
+        ]),
+      );
+      return current.map((line) => {
+        const purchaseItemId = byKey.get(line.key);
+        return purchaseItemId
+          ? { ...line, redeemFrom: 'PACKAGE' as const, packagePurchaseItemId: purchaseItemId, unitPrice: 0, discount: 0 }
+          : line;
+      });
+    });
+  }
+
+  /**
+   * SELLING A PACKAGE.
+   *
+   * A bill line like any other: priced, taxed at the salon's rate, and the
+   * sessions are created when the invoice is saved — not now, because nothing is
+   * owed until the bill exists. It needs a customer, and the API refuses without
+   * one rather than taking the money and quietly creating nothing.
+   */
+  function addPackage(template: PackageTemplate) {
+    if (!customerId) {
+      setError('Attach a customer first — the sessions in a package have to belong to somebody.');
+      return;
+    }
+    setError(null);
+    setLines((current) => [
+      ...current,
+      {
+        key: `${template.id}-${Date.now()}`,
+        itemType: 'PACKAGE',
+        refId: template.id,
+        name: `${template.name} package`,
+        quantity: 1,
+        unitPrice: Number(template.price),
+        listPrice: Number(template.price),
+        discount: 0,
+        taxRatePct: billing.defaultGstRate,
+        redeemFrom: 'NONE',
       },
     ]);
   }
@@ -312,8 +547,21 @@ export function PosTerminal({
       setError('Add at least one service or product.');
       return;
     }
-    if (lines.some((line) => line.itemType === 'MEMBERSHIP') && !customerId) {
-      setError('Attach a customer before selling a membership — it has to belong to someone.');
+    if (lines.some((line) => line.itemType === 'MEMBERSHIP' || line.itemType === 'PACKAGE') && !customerId) {
+      setError('Attach a customer before selling a package or a membership — the sessions have to belong to somebody.');
+      return;
+    }
+    /**
+     * A code that did not check out is not sent. Letting it through would fail
+     * the whole save on the server for a reason already on the screen, losing the
+     * bill over a field that is optional.
+     */
+    if (couponCode.trim().length >= 3 && !coupon) {
+      setError(
+        couponQuery.isFetching
+          ? 'Still checking that discount code — one moment.'
+          : `${errorMessage(couponQuery.error) || 'That discount code cannot be used on this bill'}. Clear the code to carry on without it.`,
+      );
       return;
     }
 
@@ -337,7 +585,9 @@ export function PosTerminal({
         })),
         billDiscountType: billDiscountValue > 0 ? billDiscountType : undefined,
         billDiscountValue: billDiscountValue > 0 ? billDiscountValue : undefined,
-        couponCode: couponCode.trim() || undefined,
+        // The code the API approved, not the raw box — so a half-typed code can
+        // never reach the invoice.
+        couponCode: coupon?.code,
         loyaltyPointsToRedeem: pointsToRedeem > 0 ? pointsToRedeem : undefined,
         useWalletAmount: walletAmount > 0 ? walletAmount : undefined,
         payments: payments
@@ -444,32 +694,27 @@ export function PosTerminal({
           </CardBody>
         </Card>
 
-        {/* Already paid for — redeem before charging again */}
-        {context && (context.packages.length > 0 || (context.membership?.freeServices.length ?? 0) > 0) ? (
+        {/* Already paid for — what each package holds, and what is left of it */}
+        <PackageHoldings
+          credit={credit}
+          services={allServices}
+          onRedeem={(service, purchaseItemId) => addService(service, { from: 'PACKAGE', purchaseItemId })}
+        />
+
+        {/* Complimentary services from a membership. Kept separate from the
+            packages above on purpose: they come from a subscription rather than
+            from sessions bought up front, they are consumed through a different
+            path in the API, and a front desk that is told they are the same thing
+            will ask why one of them ran out. */}
+        {(context?.membership?.freeServices.length ?? 0) > 0 ? (
           <Card className="border-brand-200 bg-brand-50/40">
             <CardBody className="py-3">
               <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-brand-900">
-                <Gift className="h-3.5 w-3.5" />
-                They have already paid for these — add them free
+                <Heart className="h-3.5 w-3.5" />
+                Complimentary on {context?.membership?.plan.name}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {context.packages.map((pack) => {
-                  const service = allServices.find((s) => s.id === pack.serviceId);
-                  return (
-                    <button
-                      key={pack.purchaseItemId}
-                      type="button"
-                      disabled={!service}
-                      onClick={() =>
-                        service && addService(service, { from: 'PACKAGE', purchaseItemId: pack.purchaseItemId })
-                      }
-                      className="rounded-full border border-brand-300 bg-white px-2.5 py-1 text-xs text-brand-800 hover:bg-brand-100 disabled:opacity-50"
-                    >
-                      {pack.serviceName} · {pack.remaining} left
-                    </button>
-                  );
-                })}
-                {context.membership?.freeServices.map((benefit) => {
+                {context?.membership?.freeServices.map((benefit) => {
                   const service = allServices.find((s) => s.id === benefit.serviceId);
                   return (
                     <button
@@ -477,9 +722,11 @@ export function PosTerminal({
                       type="button"
                       disabled={!service}
                       onClick={() => service && addService(service, { from: 'MEMBERSHIP' })}
-                      className="rounded-full border border-brand-300 bg-white px-2.5 py-1 text-xs text-brand-800 hover:bg-brand-100 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-white px-2.5 py-1 text-xs text-brand-800 hover:bg-brand-100 disabled:opacity-50"
                     >
-                      {benefit.serviceName} · {benefit.remaining} free
+                      <Plus className="h-3 w-3" />
+                      {benefit.serviceName}
+                      <span className="tnum text-2xs">{benefit.remaining} of {benefit.totalQty} free</span>
                     </button>
                   );
                 })}
@@ -488,11 +735,47 @@ export function PosTerminal({
           </Card>
         ) : null}
 
+        {/**
+          * CHARGING FOR SOMETHING THEY HAVE ALREADY BOUGHT.
+          *
+          * Not corrected silently. The lines are already priced and somebody may
+          * be reading the total out loud, so the till says what it found and
+          * leaves the decision — there are real reasons to charge anyway, like
+          * saving the session for an appointment later in the week.
+          */}
+        {overcharged.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+            <p className="flex-1 text-xs leading-relaxed text-amber-900">
+              {overcharged.length === 1
+                ? `${overcharged[0]!.line.name} is being charged for, and it is already in ${overcharged[0]!.credit.entitlement.packageName}.`
+                : `${overcharged.length} services on this bill are already paid for in a package.`}
+            </p>
+            <button
+              type="button"
+              onClick={useAllPackages}
+              className="rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700"
+            >
+              Use the package
+            </button>
+          </div>
+        ) : null}
+
         {/* Catalogue */}
         <Card>
           <div className="flex items-center gap-2 border-b border-stone-200 p-3">
             <div className="flex rounded-lg border border-stone-300 bg-white p-0.5">
-              {(membershipPlans.length > 0 ? (['services', 'products', 'memberships'] as const) : (['services', 'products'] as const)).map((value) => (
+              {/* Tabs for what the salon actually sells. A packages tab with no
+                  packages, or a memberships tab with no plans, is a dead end that
+                  makes the till look broken. */}
+              {(
+                [
+                  'services',
+                  'products',
+                  ...(packageTemplates.length > 0 ? (['packages'] as const) : []),
+                  ...(membershipPlans.length > 0 ? (['memberships'] as const) : []),
+                ] as const
+              ).map((value) => (
                 <button
                   key={value}
                   type="button"
@@ -539,6 +822,15 @@ export function PosTerminal({
                   ))}
                 </div>
               )
+            ) : tab === 'packages' ? (
+              <PackageCatalogue
+                templates={packageTemplates}
+                services={allServices}
+                search={catalogueSearch}
+                hasCustomer={Boolean(customerId)}
+                held={context?.packages ?? []}
+                onSell={addPackage}
+              />
             ) : tab === 'memberships' ? (
               <div>
                 {!customerId ? (
@@ -605,23 +897,84 @@ export function PosTerminal({
 
         {/* Cart */}
         <Card>
-          <CardHeader title="Bill" subtitle={lines.length === 0 ? 'Nothing added yet' : `${lines.length} line items`} />
+          {/* The split, in the subtitle. "6 line items" does not tell the front
+              desk the thing they are about to be asked: how much of this is she
+              actually paying for? */}
+          <CardHeader
+            title="Bill"
+            subtitle={
+              lines.length === 0
+                ? 'Nothing added yet'
+                : (() => {
+                    const covered = lines.filter((line) => line.redeemFrom !== 'NONE').length;
+                    const charged = lines.length - covered;
+                    if (covered === 0) return `${lines.length} line items`;
+                    if (charged === 0) return `${covered} covered, nothing to pay`;
+                    return `${charged} charged · ${covered} covered by what they already own`;
+                  })()
+            }
+          />
           {lines.length === 0 ? (
             <CardBody>
               <p className="py-6 text-center text-sm text-ink-subtle">Tap a service above to start the bill.</p>
             </CardBody>
           ) : (
             <ul className="divide-y divide-stone-100">
-              {lines.map((line) => (
-                <li key={line.key} className="p-3">
+              {lines.map((line) => {
+                const covered = line.redeemFrom !== 'NONE';
+                /** A charged service this customer could take off a package instead. */
+                const coverable =
+                  !covered && line.itemType === 'SERVICE'
+                    ? overcharged.some((match) => match.line.key === line.key)
+                    : false;
+                const fromPackage = line.packagePurchaseItemId
+                  ? credit.find((entry) => entry.entitlement.purchaseItemId === line.packagePurchaseItemId)
+                  : undefined;
+
+                return (
+                <li key={line.key} className={cn('p-3', covered && 'bg-brand-50/50')}>
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                      <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-ink">
                         {line.name}
-                        {line.redeemFrom !== 'NONE' ? (
-                          <Badge tone="brand">{line.redeemFrom === 'PACKAGE' ? 'Package' : 'Membership'}</Badge>
+                        {covered ? (
+                          <Badge tone="brand">
+                            <Check className="h-3 w-3" />
+                            {line.redeemFrom === 'PACKAGE'
+                              ? fromPackage?.entitlement.packageName ?? 'Package'
+                              : 'Membership'}
+                          </Badge>
+                        ) : null}
+                        {line.itemType === 'PACKAGE' ? (
+                          <Badge tone="neutral">
+                            <Package className="h-3 w-3" />
+                            Selling
+                          </Badge>
                         ) : null}
                       </p>
+
+                      {/* The two one-click reversals. Both are reversible and
+                          neither needs confirming; what they must do is say what
+                          the money does, because "Charge instead" with no figure
+                          beside it is a button nobody presses. */}
+                      {covered && line.redeemFrom === 'PACKAGE' ? (
+                        <button
+                          type="button"
+                          onClick={() => chargeInstead(line.key)}
+                          className="mt-0.5 text-2xs text-ink-subtle underline underline-offset-2 hover:text-ink"
+                        >
+                          Charge {money(line.listPrice * line.quantity)} instead and keep the session
+                        </button>
+                      ) : null}
+                      {coverable ? (
+                        <button
+                          type="button"
+                          onClick={() => useOnePackage(line.key)}
+                          className="mt-0.5 text-2xs font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
+                        >
+                          Already in their package — use it instead of charging {money(line.unitPrice * line.quantity - line.discount)}
+                        </button>
+                      ) : null}
                       {line.itemType === 'SERVICE' ? (
                         <select
                           value={line.staffId ?? ''}
@@ -691,7 +1044,8 @@ export function PosTerminal({
                     </button>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -722,12 +1076,65 @@ export function PosTerminal({
                     className="tnum text-right"
                   />
                 </div>
-                <Input
-                  value={couponCode}
-                  onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
-                  placeholder="Coupon code (optional)"
-                  className="uppercase"
-                />
+                {/**
+                  * A DISCOUNT CODE THAT SAYS WHETHER IT WORKS, BEFORE THE SAVE.
+                  *
+                  * This box used to take a code and tell you nothing. It went out
+                  * with the invoice, and an expired or used-up code failed the
+                  * whole save — in front of the customer, with no bill raised.
+                  * Now the code is checked as it is typed and the answer sits
+                  * under the field, in the API's own words.
+                  */}
+                <div>
+                  <div className="relative">
+                    <Ticket className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle" />
+                    <Input
+                      value={couponCode}
+                      onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                      placeholder="Discount code (optional)"
+                      className="pl-8 pr-16 uppercase"
+                      aria-describedby="coupon-status"
+                    />
+                    {couponCode ? (
+                      <button
+                        type="button"
+                        onClick={() => setCouponCode('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-2xs text-ink-subtle hover:text-ink"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <p id="coupon-status" aria-live="polite" className="mt-1 text-2xs leading-relaxed">
+                    {couponCode.trim().length === 0 ? null : couponCode.trim().length < 3 ? (
+                      <span className="text-ink-subtle">Keep typing…</span>
+                    ) : lines.length === 0 ? (
+                      <span className="text-ink-subtle">Add something to the bill to check this code.</span>
+                    ) : couponQuery.isFetching ? (
+                      <span className="text-ink-subtle">Checking {couponCode.trim()}…</span>
+                    ) : coupon ? (
+                      <span className="flex items-start gap-1 font-medium text-emerald-700">
+                        <Check className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span>
+                          {coupon.code} applied — {money(coupon.discount)} off
+                          {coupon.description ? ` · ${coupon.description}` : ''}
+                          {/* Named when it bites, because "20% off" and "₹500
+                              off" look identical on the total when the cap is
+                              what decided it. */}
+                          {coupon.maxDiscount && Number(coupon.discount) >= Number(coupon.maxDiscount)
+                            ? ` · capped at ${money(coupon.maxDiscount)}`
+                            : ''}
+                        </span>
+                      </span>
+                    ) : couponQuery.isError ? (
+                      <span className="flex items-start gap-1 text-rose-700">
+                        <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                        {errorMessage(couponQuery.error)}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
               </div>
             ) : null}
 
@@ -807,8 +1214,21 @@ export function PosTerminal({
 
             <dl className="space-y-1.5 border-t border-stone-200 pt-3 text-sm">
               <Row label="Subtotal" value={moneyExact(totals.subtotal)} />
-              {totals.billDiscount > 0 ? (
-                <Row label="Bill discount" value={`− ${moneyExact(totals.billDiscount)}`} tone="negative" />
+              {/* What the package covered, named and valued. It is ₹0 on the
+                  bill, so without this row the only trace of it is a subtotal
+                  that looks suspiciously low — and the salon never sees the value
+                  it handed over against money it took months ago. */}
+              {totals.coveredValue > 0 ? (
+                <Row label="Covered by what they own" value={`${moneyExact(totals.coveredValue)} at no charge`} muted />
+              ) : null}
+              {/* The manual discount and the code shown apart. Added together
+                  they are an amount nobody can account for, and the code is the
+                  half somebody will be asked to justify. */}
+              {totals.manualDiscount > 0 ? (
+                <Row label="Bill discount" value={`− ${moneyExact(totals.manualDiscount)}`} tone="negative" />
+              ) : null}
+              {couponDiscount > 0 ? (
+                <Row label={`Code ${coupon?.code ?? ''}`} value={`− ${moneyExact(couponDiscount)}`} tone="negative" />
               ) : null}
               {totals.taxAdded > 0 ? <Row label="GST" value={moneyExact(totals.taxAdded)} /> : null}
               {/* The reduction, named. Without this row the total simply drops
