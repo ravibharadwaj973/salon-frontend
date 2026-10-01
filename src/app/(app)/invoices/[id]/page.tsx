@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { ApiError, apiFetch, apiFetchAllowed } from '@/lib/api';
+import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Card, CardBody, CardHeader, StatusBadge } from '@/components/ui/display';
 import { PermissionGate } from '@/components/permission-gate';
 import { InvoiceActions } from './invoice-actions';
+import { LineStaff } from './line-staff';
 import { RemovePaymentButton } from './remove-payment-button';
 import { date, fullName, money, moneyExact, phone as formatPhone, time } from '@/lib/format';
-import type { Invoice, SessionUser } from '@/lib/types';
+import type { Invoice, SessionUser, Staff } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,30 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
   const user = await apiFetch<SessionUser>('/auth/me', { noBranch: true });
   const due = Number(invoice.dueAmount);
+
+  /**
+   * CORRECTING WHO PERFORMED A SERVICE, ON A BILL THAT IS ALREADY ISSUED.
+   *
+   * A voided bill is excluded: nothing on it is owed to anybody, so there is no
+   * attribution left to argue about and the API refuses it anyway.
+   *
+   * The staff list is pinned to the branch that ISSUED the bill rather than to
+   * whichever branch is selected in the picker. An owner reviewing a bill from
+   * another shop would otherwise be offered the wrong shop's people — and the
+   * API rejects anybody from elsewhere, because the commission entry is filed
+   * against the bill's branch and would land under a branch they do not work at.
+   *
+   * Failing quietly to an empty list is deliberate: no staff to pick from leaves
+   * the bill readable, which is the thing this screen is for.
+   */
+  const canSetStaff = user.permissions.includes('invoice.item_staff') && invoice.status !== 'VOID';
+  const staff = canSetStaff
+    ? (
+        await apiFetchList<Staff>('/staff', {
+          query: { branchId: invoice.branchId, isActive: 'true', pageSize: 200 },
+        }).catch(() => null)
+      )?.data ?? []
+    : [];
 
   return (
     <>
@@ -131,11 +156,23 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                   <td className="px-6 py-3">
                     <p className="font-medium text-ink">{item.name}</p>
                     <p className="text-2xs text-ink-subtle">
-                      {item.staff ? `${item.staff.displayName} · ` : ''}
+                      {/* A service's performer moved to its own line below, where
+                          it can be changed. A product's seller stays here: there
+                          is nothing to correct and no commission on it. */}
+                      {item.itemType !== 'SERVICE' && item.staff ? `${item.staff.displayName} · ` : ''}
                       {item.itemType.toLowerCase()}
                       {item.redeemedFrom !== 'NONE' ? ` · redeemed from ${item.redeemedFrom.toLowerCase()}` : ''}
                       {item.hsnSac ? ` · HSN ${item.hsnSac}` : ''}
                     </p>
+                    {item.itemType === 'SERVICE' ? (
+                      <LineStaff
+                        invoiceId={invoice.id}
+                        itemId={item.id}
+                        current={item.staff ?? null}
+                        staff={staff}
+                        editable={canSetStaff}
+                      />
+                    ) : null}
                   </td>
                   <td className="tnum px-3 py-3 text-right text-ink-muted">{Number(item.quantity)}</td>
                   <td className="tnum px-3 py-3 text-right text-ink-muted">{moneyExact(item.unitPrice)}</td>
