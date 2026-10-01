@@ -266,6 +266,13 @@ export interface Service {
   price: Money;
   memberPrice: Money | null;
   taxRatePct: Money;
+  /**
+   * Does this price already contain the GST?
+   *
+   * `null` means "use the salon's setting", which is what almost every service
+   * says. Only the exceptions answer for themselves.
+   */
+  priceIncludesTax: boolean | null;
   commissionRate: Money;
   onlineBookable: boolean;
   isActive: boolean;

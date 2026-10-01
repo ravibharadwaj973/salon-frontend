@@ -13,10 +13,17 @@ export function ServiceEditor({
   categories,
   service,
   compact,
+  /**
+   * The salon's own answer, so the default option can say what following it
+   * actually does. "Use the salon setting" alone makes somebody leave the
+   * screen to find out what that setting is.
+   */
+  salonPricesIncludeTax = true,
 }: {
   categories: ServiceCategory[];
   service?: Service;
   compact?: boolean;
+  salonPricesIncludeTax?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -33,6 +40,13 @@ export function ServiceEditor({
     price: Number(service?.price ?? 0),
     memberPrice: service?.memberPrice ? Number(service.memberPrice) : 0,
     commissionRate: Number(service?.commissionRate ?? 0),
+    /**
+     * Three answers held as a string, because null is one of them and a select
+     * cannot carry it. '' is "follow the salon", which is what a new service
+     * should always start as.
+     */
+    priceIncludesTax:
+      service?.priceIncludesTax === true ? 'yes' : service?.priceIncludesTax === false ? 'no' : '',
     onlineBookable: service?.onlineBookable ?? true,
     isActive: service?.isActive ?? true,
   });
@@ -59,6 +73,9 @@ export function ServiceEditor({
         memberPrice: form.memberPrice > 0 ? form.memberPrice : undefined,
         commissionType: form.commissionRate > 0 ? 'PERCENT_OF_SERVICE' : 'NONE',
         commissionRate: form.commissionRate,
+        // null, not undefined. Going back to "follow the salon" has to CLEAR the
+        // service's own answer, and an omitted key on a PATCH leaves it standing.
+        priceIncludesTax: form.priceIncludesTax === '' ? null : form.priceIncludesTax === 'yes',
         onlineBookable: form.onlineBookable,
         ...(service ? { isActive: form.isActive } : {}),
       };
@@ -156,6 +173,34 @@ export function ServiceEditor({
             <Field label="Price (₹)" required hint="What you charge — GST is decided on the bill">
               {({ id }) => (
                 <Input id={id} type="number" value={form.price} onChange={(e) => set('price', Number(e.target.value))} className="tnum text-right" />
+              )}
+            </Field>
+
+            {/**
+              * WHAT THE NUMBER ABOVE MEANS, NOT WHAT THE TAX RATE IS.
+              *
+              * The rate stays the salon's single rate in Settings — a service is
+              * a price, not a tax position. This asks something the person typing
+              * the price already knows and nothing else can tell: does ₹800 mean
+              * ₹800 to the customer, or ₹800 plus tax? At 18% those are ₹800 and
+              * ₹944, and getting it wrong is wrong by that much on every sale.
+              *
+              * Almost every service should stay on the salon's answer. This is
+              * for the handful that are quoted the other way.
+              */}
+            <Field label="This price" hint="Whether GST is already inside the number">
+              {({ id }) => (
+                <Select
+                  id={id}
+                  value={form.priceIncludesTax}
+                  onChange={(e) => set('priceIncludesTax', e.target.value as typeof form.priceIncludesTax)}
+                >
+                  <option value="">
+                    Same as the salon — {salonPricesIncludeTax ? 'GST already inside' : 'GST added on top'}
+                  </option>
+                  <option value="yes">Already includes GST</option>
+                  <option value="no">GST gets added on top</option>
+                </Select>
               )}
             </Field>
 

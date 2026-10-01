@@ -6,17 +6,23 @@ import { TBody, TD, TH, THead, TR, Table } from '@/components/ui/table';
 import { ServiceEditor } from './service-editor';
 import { CategoryEditor } from './category-editor';
 import { duration, money, percent } from '@/lib/format';
-import type { Service, ServiceCategory, SessionUser } from '@/lib/types';
+import type { BillingDefaults, Service, ServiceCategory, SessionUser } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Services' };
 export const dynamic = 'force-dynamic';
 
 export default async function ServicesPage() {
-  const [{ data: services }, categories, user] = await Promise.all([
+  const [{ data: services }, categories, user, billing] = await Promise.all([
     apiFetchList<Service>('/services', { query: { pageSize: 200, sortBy: 'name', sortDir: 'asc' } }),
     apiFetchSafe<ServiceCategory[]>('/services/categories'),
     apiFetchSafe<SessionUser>('/auth/me', { noBranch: true }),
+    // Only to label the "same as the salon" option on the price editor. A 403
+    // for somebody who may edit services but not bill falls back to the common
+    // case rather than taking the page down.
+    apiFetchSafe<BillingDefaults>('/invoices/billing-defaults', { noBranch: true }),
   ]);
+
+  const salonPricesIncludeTax = billing?.pricesIncludeTax ?? true;
 
   const canManage = user?.permissions.includes('service.manage') ?? false;
 
@@ -50,7 +56,7 @@ export default async function ServicesPage() {
           canManage ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               <CategoryEditor />
-              <ServiceEditor categories={categories ?? []} />
+              <ServiceEditor categories={categories ?? []} salonPricesIncludeTax={salonPricesIncludeTax} />
             </div>
           ) : null
         }
@@ -132,7 +138,12 @@ export default async function ServicesPage() {
                       </TD>
                       {canManage ? (
                         <TD align="right">
-                          <ServiceEditor categories={categories ?? []} service={service} compact />
+                          <ServiceEditor
+                            categories={categories ?? []}
+                            service={service}
+                            salonPricesIncludeTax={salonPricesIncludeTax}
+                            compact
+                          />
                         </TD>
                       ) : null}
                     </TR>

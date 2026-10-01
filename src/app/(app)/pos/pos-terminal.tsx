@@ -56,6 +56,15 @@ interface CartLine {
   listPrice: number;
   discount: number;
   taxRatePct: number;
+  /**
+   * Does this line's price already contain the GST?
+   *
+   * Snapshotted onto the line when it is added, from the service's own setting
+   * and falling back to the salon's. Per line and not per bill: a salon quotes
+   * most treatments tax-inclusive and some plus-tax, and one switch for both
+   * billed one group wrong by the tax on every sale.
+   */
+  priceIncludesTax: boolean;
   /** Everyone who performed it, primary first. Empty means nobody is credited. */
   staffIds: string[];
   redeemFrom: 'NONE' | 'PACKAGE' | 'MEMBERSHIP';
@@ -129,6 +138,20 @@ export function PosTerminal({
 
   const allServices = useMemo(() => serviceGroups.flatMap((group) => group.services), [serviceGroups]);
 
+  /**
+   * Whether this bill's prices all follow one convention or two.
+   *
+   * Only here to word the line under the GST switch. It used to read off one
+   * salon-wide setting and say "GST is inside the menu price" — a sentence that
+   * is now sometimes true of half the bill, and a confident half-truth about tax
+   * is worse than saying it plainly.
+   */
+  const pricing = useMemo(() => {
+    const inclusive = lines.some((line) => line.priceIncludesTax);
+    const exclusive = lines.some((line) => !line.priceIncludesTax);
+    return inclusive && exclusive ? 'mixed' : exclusive ? 'exclusive' : 'inclusive';
+  }, [lines]);
+
   // Prefill the cart from the appointment being billed.
   useEffect(() => {
     if (!appointment) return;
@@ -145,13 +168,19 @@ export function PosTerminal({
           listPrice: Number(line.price),
           discount: Number(line.discount),
           taxRatePct: billing.defaultGstRate,
+          // Read off the menu rather than the appointment: the booking carries a
+          // thin copy of the service, and the menu is where the pricing
+          // convention actually lives.
+          priceIncludesTax:
+            allServices.find((candidate) => candidate.id === line.serviceId)?.priceIncludesTax ??
+            billing.pricesIncludeTax,
           // An appointment books one stylist per service. A second person who
           // ends up on it is added at the till, which is where it becomes true.
           staffIds: line.staffId ? [line.staffId] : [],
           redeemFrom: 'NONE' as const,
         })),
     );
-  }, [appointment, billing.defaultGstRate]);
+  }, [appointment, allServices, billing.defaultGstRate, billing.pricesIncludeTax]);
 
   const { data: results } = useQuery({
     queryKey: ['pos-customer-search', search],
@@ -272,21 +301,27 @@ export function PosTerminal({
      */
     const embedded = (net: number, ratePct: number) => net - (net * 100) / (100 + ratePct);
 
-    const taxByLine = lines.map((line) => {
+    /**
+     * Summed into two buckets rather than one, because a bill can now hold both
+     * kinds of line at once and they move the total in opposite directions: tax
+     * already inside a price is shown, tax not yet in one is added.
+     */
+    let taxInsidePrices = 0;
+    let taxOnTopOfPrices = 0;
+    for (const line of lines) {
       const lineNet = Math.max(0, line.unitPrice * line.quantity - line.discount);
       const share = subtotal > 0 ? lineNet / subtotal : 0;
       const afterBillDiscount = lineNet - billDiscount * share;
-      return billing.pricesIncludeTax
-        ? embedded(afterBillDiscount, line.taxRatePct)
-        : (afterBillDiscount * line.taxRatePct) / 100;
-    });
-    const tax = taxByLine.reduce((sum, t) => sum + t, 0);
+      if (line.priceIncludesTax) taxInsidePrices += embedded(afterBillDiscount, line.taxRatePct);
+      else taxOnTopOfPrices += (afterBillDiscount * line.taxRatePct) / 100;
+    }
 
-    const taxIncluded = gst && billing.pricesIncludeTax ? tax : 0;
-    const taxAdded = gst && !billing.pricesIncludeTax ? tax : 0;
+    const taxIncluded = gst ? taxInsidePrices : 0;
+    const taxAdded = gst ? taxOnTopOfPrices : 0;
     // Taken off the bill rather than pocketed. Shown as its own line, because a
     // total that quietly shrinks is a total the person at the counter distrusts.
-    const taxRemoved = !gst && billing.pricesIncludeTax ? tax : 0;
+    // Only the prices that CONTAINED tax give any back.
+    const taxRemoved = !gst ? taxInsidePrices : 0;
 
     const beforeRounding = netTotal + taxAdded - taxRemoved;
     const grandTotal = Math.round(beforeRounding);
@@ -320,7 +355,7 @@ export function PosTerminal({
       due: Math.max(0, grandTotal - paid),
       change: Math.max(0, paid - grandTotal),
     };
-  }, [lines, basis, couponDiscount, context, pointsToRedeem, walletAmount, payments, gst, billing.pricesIncludeTax]);
+  }, [lines, basis, couponDiscount, context, pointsToRedeem, walletAmount, payments, gst]);
 
   // --------------------------------------------------------------- cart ---
   /**
@@ -359,6 +394,10 @@ export function PosTerminal({
         listPrice: Number(service.price),
         discount: Math.round(autoDiscount * 100) / 100,
         taxRatePct: billing.defaultGstRate,
+        // The service's own answer where it has one, the salon's otherwise.
+        // `??` and not `||`: false means "this price does NOT include GST" and is
+        // a real answer, which `||` would throw away.
+        priceIncludesTax: service.priceIncludesTax ?? billing.pricesIncludeTax,
         staffIds: [],
         redeemFrom: matched?.from ?? 'NONE',
         packagePurchaseItemId: matched?.purchaseItemId,
@@ -475,6 +514,7 @@ export function PosTerminal({
         listPrice: Number(template.price),
         discount: 0,
         taxRatePct: billing.defaultGstRate,
+        priceIncludesTax: billing.pricesIncludeTax,
         staffIds: [],
         redeemFrom: 'NONE',
       },
@@ -493,6 +533,9 @@ export function PosTerminal({
         unitPrice: Number(product.sellingPrice),
         listPrice: Number(product.sellingPrice),
         discount: 0,
+        // Retail has no per-item setting of its own yet, so the salon's answer
+        // stands for every product.
+        priceIncludesTax: billing.pricesIncludeTax,
         taxRatePct: Number(product.taxRatePct),
         staffIds: [],
         redeemFrom: 'NONE',
@@ -524,6 +567,7 @@ export function PosTerminal({
         listPrice: Number(plan.price),
         discount: 0,
         taxRatePct: billing.defaultGstRate,
+        priceIncludesTax: billing.pricesIncludeTax,
         staffIds: [],
         redeemFrom: 'NONE',
       },
@@ -1188,12 +1232,16 @@ export function PosTerminal({
                   {!billing.hasGstin
                     ? 'No GSTIN on file — add it in Settings → Salon to make tax invoices.'
                     : gst
-                      ? billing.pricesIncludeTax
-                        ? 'GST is inside the menu price and shown on the bill.'
-                        : 'GST is added on top of the menu price.'
-                      : billing.pricesIncludeTax
-                        ? 'The GST inside the menu price is taken off, so the customer pays less. Not counted in the GST report.'
-                        : 'No GST charged or shown. Not counted in the GST report.'}
+                      ? pricing === 'mixed'
+                        ? 'Some of these prices already include GST; on the rest it is added on top.'
+                        : pricing === 'inclusive'
+                          ? 'GST is inside these prices and shown on the bill.'
+                          : 'GST is added on top of these prices.'
+                      : pricing === 'mixed'
+                        ? 'Prices that included GST have it taken off; the rest are unchanged. Not counted in the GST report.'
+                        : pricing === 'inclusive'
+                          ? 'The GST inside these prices is taken off, so the customer pays less. Not counted in the GST report.'
+                          : 'No GST charged or shown. Not counted in the GST report.'}
                 </p>
               </div>
               {billing.canChooseGst && billing.hasGstin ? (
