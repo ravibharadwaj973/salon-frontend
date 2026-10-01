@@ -6,7 +6,7 @@ import { ApiError, apiFetch, apiFetchAllowed, apiFetchList } from '@/lib/api';
 import { Card, CardBody, CardHeader, StatusBadge } from '@/components/ui/display';
 import { PermissionGate } from '@/components/permission-gate';
 import { InvoiceActions } from './invoice-actions';
-import { LineStaff } from './line-staff';
+import { PerformersPanel } from './performers-panel';
 import { RemovePaymentButton } from './remove-payment-button';
 import { date, fullName, money, moneyExact, phone as formatPhone, time } from '@/lib/format';
 import type { Invoice, SessionUser, Staff } from '@/lib/types';
@@ -155,24 +155,17 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 <tr key={item.id}>
                   <td className="px-6 py-3">
                     <p className="font-medium text-ink">{item.name}</p>
+                    {/* NO STYLIST'S NAME ANYWHERE ON THIS DOCUMENT.
+                        This card is what the customer is handed and prints
+                        as-is. Who performed the service is the salon's own
+                        business — it decides who earns what — and a receipt is
+                        not where that belongs. The attribution is in the
+                        internal panel below, which never prints. */}
                     <p className="text-2xs text-ink-subtle">
-                      {/* A service's performer moved to its own line below, where
-                          it can be changed. A product's seller stays here: there
-                          is nothing to correct and no commission on it. */}
-                      {item.itemType !== 'SERVICE' && item.staff ? `${item.staff.displayName} · ` : ''}
                       {item.itemType.toLowerCase()}
                       {item.redeemedFrom !== 'NONE' ? ` · redeemed from ${item.redeemedFrom.toLowerCase()}` : ''}
                       {item.hsnSac ? ` · HSN ${item.hsnSac}` : ''}
                     </p>
-                    {item.itemType === 'SERVICE' ? (
-                      <LineStaff
-                        invoiceId={invoice.id}
-                        itemId={item.id}
-                        current={item.staff ?? null}
-                        staff={staff}
-                        editable={canSetStaff}
-                      />
-                    ) : null}
                   </td>
                   <td className="tnum px-3 py-3 text-right text-ink-muted">{Number(item.quantity)}</td>
                   <td className="tnum px-3 py-3 text-right text-ink-muted">{moneyExact(item.unitPrice)}</td>
@@ -296,6 +289,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </CardBody>
         </Card>
       ) : null}
+
+      {/* Internal. Below the bill, never printed with it. */}
+      <PerformersPanel invoiceId={invoice.id} items={invoice.items} staff={staff} editable={canSetStaff} />
     </>
   );
 }

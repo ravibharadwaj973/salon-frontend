@@ -412,8 +412,16 @@ export interface InvoiceItem {
   refId: string | null;
   name: string;
   hsnSac: string | null;
+  /** The primary performer. Internal: never shown on the bill the customer gets. */
   staffId: string | null;
   staff?: { id: string; displayName: string } | null;
+  /** Everyone who performed it, primary first. Also internal. */
+  performers?: {
+    staffId: string;
+    sharePct: Money;
+    isPrimary: boolean;
+    staff: { id: string; displayName: string };
+  }[];
   quantity: Money;
   unitPrice: Money;
   discount: Money;

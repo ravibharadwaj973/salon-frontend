@@ -30,6 +30,7 @@ import { fullName, money, moneyExact, phone as formatPhone } from '@/lib/format'
 import type { Appointment, BillingDefaults, Customer, Invoice, MembershipPlan, PackageTemplate, PaymentMode, PosContext, Product, Service, Staff } from '@/lib/types';
 import { coverFor, overchargedLines, packageCredit } from './package-matching';
 import { PackageCatalogue, PackageHoldings } from './pos-packages';
+import { StaffPicker } from '@/components/staff-picker';
 
 /**
  * Every payment mode here is a *record* of money already taken at the counter.
@@ -55,7 +56,8 @@ interface CartLine {
   listPrice: number;
   discount: number;
   taxRatePct: number;
-  staffId?: string;
+  /** Everyone who performed it, primary first. Empty means nobody is credited. */
+  staffIds: string[];
   redeemFrom: 'NONE' | 'PACKAGE' | 'MEMBERSHIP';
   packagePurchaseItemId?: string;
 }
@@ -143,7 +145,9 @@ export function PosTerminal({
           listPrice: Number(line.price),
           discount: Number(line.discount),
           taxRatePct: billing.defaultGstRate,
-          staffId: line.staffId ?? undefined,
+          // An appointment books one stylist per service. A second person who
+          // ends up on it is added at the till, which is where it becomes true.
+          staffIds: line.staffId ? [line.staffId] : [],
           redeemFrom: 'NONE' as const,
         })),
     );
@@ -355,6 +359,7 @@ export function PosTerminal({
         listPrice: Number(service.price),
         discount: Math.round(autoDiscount * 100) / 100,
         taxRatePct: billing.defaultGstRate,
+        staffIds: [],
         redeemFrom: matched?.from ?? 'NONE',
         packagePurchaseItemId: matched?.purchaseItemId,
       },
@@ -470,6 +475,7 @@ export function PosTerminal({
         listPrice: Number(template.price),
         discount: 0,
         taxRatePct: billing.defaultGstRate,
+        staffIds: [],
         redeemFrom: 'NONE',
       },
     ]);
@@ -488,6 +494,7 @@ export function PosTerminal({
         listPrice: Number(product.sellingPrice),
         discount: 0,
         taxRatePct: Number(product.taxRatePct),
+        staffIds: [],
         redeemFrom: 'NONE',
       },
     ]);
@@ -517,6 +524,7 @@ export function PosTerminal({
         listPrice: Number(plan.price),
         discount: 0,
         taxRatePct: billing.defaultGstRate,
+        staffIds: [],
         redeemFrom: 'NONE',
       },
     ]);
@@ -539,7 +547,7 @@ export function PosTerminal({
    * commission here is earned on services, and a bottle of shampoo has no
    * performer to name.
    */
-  const unassigned = lines.filter((line) => line.itemType === 'SERVICE' && !line.staffId).length;
+  const unassigned = lines.filter((line) => line.itemType === 'SERVICE' && line.staffIds.length === 0).length;
 
   async function submit() {
     setError(null);
@@ -574,7 +582,7 @@ export function PosTerminal({
         items: lines.map((line) => ({
           itemType: line.itemType,
           refId: line.refId,
-          staffId: line.staffId,
+          staffIds: line.staffIds,
           quantity: line.quantity,
           unitPrice: line.redeemFrom === 'NONE' ? line.unitPrice : 0,
           discount: line.discount || undefined,
@@ -975,19 +983,17 @@ export function PosTerminal({
                           Already in their package — use it instead of charging {money(line.unitPrice * line.quantity - line.discount)}
                         </button>
                       ) : null}
+                      {/* Everyone on this service. Lives here and nowhere else:
+                          the saved invoice is a document for the customer and
+                          carries no stylist's name at all. */}
                       {line.itemType === 'SERVICE' ? (
-                        <select
-                          value={line.staffId ?? ''}
-                          onChange={(event) => updateLine(line.key, { staffId: event.target.value || undefined })}
-                          className="mt-1 h-7 rounded-md border border-stone-300 bg-white px-2 text-xs text-ink-muted"
-                        >
-                          <option value="">Who performed this?</option>
-                          {staff.map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {member.displayName}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="mt-1">
+                          <StaffPicker
+                            value={line.staffIds}
+                            staff={staff}
+                            onChange={(staffIds) => updateLine(line.key, { staffIds })}
+                          />
+                        </div>
                       ) : null}
                     </div>
 
