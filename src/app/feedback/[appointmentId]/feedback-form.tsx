@@ -10,13 +10,27 @@ import { Textarea } from '@/components/ui/form';
 /**
  * HOW LONG A THANK-YOU SCREEN MAY ASK SOMEBODY TO WAIT.
  *
- * Three seconds. They have just pressed send, they are standing at a counter,
- * and the only thing left to decide is whether to bother with Google — so the
- * suggestions are worth a short pause and nothing more. At three seconds the
- * spinner goes and the screen settles into what it looked like before
- * suggestions existed: a thank-you and the button, complete and usable.
+ * Four seconds, and it is now a real wait rather than a spinner beside a button
+ * somebody can already press.
+ *
+ * It used to be three, with the Google button live underneath the whole time.
+ * That was the wrong shape: nobody waits beside a working button. People tapped
+ * it, landed on an empty Google box with nothing in the clipboard, and closed
+ * it — so the drafts arrived for an audience that had already gone, and the
+ * feature almost never landed. The button is held until the screen is settled,
+ * which is what makes the pause worth anything.
+ *
+ * Four rather than three because the drafts are now written when the rating is
+ * saved, not when this screen asks for them, so the usual answer arrives in a
+ * database read. Four covers the slower ones without the number ever being the
+ * thing somebody is waiting on.
+ *
+ * It is a CEILING, never a trap. Whatever happens, at four seconds the button
+ * appears and the screen is complete without suggestions — exactly as it was
+ * before they existed. Holding somebody on a thank-you screen is worse than
+ * letting them leave without a draft.
  */
-const SUGGESTION_WAIT_MS = 3000;
+const SUGGESTION_WAIT_MS = 4000;
 
 /**
  * AND HOW LONG THE ANSWER IS STILL WORTH HAVING — WHICH IS NOT THE SAME NUMBER.
@@ -286,18 +300,19 @@ export function FeedbackForm({
      */
     const suggestions = suggested ?? [];
     /**
-     * Still being written, AND still worth showing a spinner for.
+     * THE SCREEN HAS SETTLED: THE DRAFTS ARE HERE, OR WE HAVE STOPPED WAITING.
      *
-     * `!waited` is what bounds it. Without that this was true for as long as the
-     * request took — which, when the model was slow or the request never came
-     * back at all, meant forever: a customer left looking at a promise with no
-     * deadline on a screen that had otherwise finished.
+     * This used to be the inverse — `writing` — and the comment under it said
+     * "nothing below is blocked by it", which was the bug. The Google button sat
+     * live beside the spinner, so the suggestions were racing a tap they could
+     * not win: people pressed the button, arrived at an empty Google box, and
+     * the drafts turned up for somebody who had already left.
      *
-     * Nothing below is blocked by it. The thank-you, the apology and the Google
-     * button all render regardless; this only decides whether a spinner sits
-     * among them.
+     * Now it gates the button and only the button. The thank-you, the rating and
+     * the apology all render immediately — nobody is left staring at a blank
+     * screen wondering whether their rating saved.
      */
-    const writing = result.feedbackId != null && suggested === null && !waited;
+    const ready = result.feedbackId == null || suggested !== null || waited;
     return (
       <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-card">
         <span
@@ -338,28 +353,9 @@ export function FeedbackForm({
           * open. Reversed, they land on a blank Google form having left the
           * draft behind on a tab they have closed.
           */}
-        {/**
-          * A SPINNER, BECAUSE A LINE OF TEXT IS NOT A LOADER.
-          *
-          * This was a static sentence, which on a screen that has just finished
-          * doing something reads as a statement rather than as progress — and
-          * with nothing moving, a page that has stopped working looks exactly
-          * the same as one that is still thinking. It also had no end: without
-          * the timer above, that sentence stayed on screen forever whenever the
-          * model was slow.
-          *
-          * Given a fixed height so the Google button below sits in the same
-          * place before and after. It is a tap target on a phone, and a button
-          * that moves the instant somebody reaches for it is how people end up
-          * pressing whatever took its place.
-          */}
-        {writing ? (
-          <div className="mt-4 flex h-9 items-center justify-center gap-2" role="status" aria-live="polite">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600" aria-hidden />
-            <span className="text-xs text-ink-subtle">Putting what you said into words…</span>
-          </div>
-        ) : null}
-
+        {/* The spinner that used to sit here has moved into the button's own
+            place below. Two indicators for one wait is one too many, and the
+            button is where the eye already is. */}
         {suggestions.length > 0 ? (
           <div className="mt-4 text-left">
             {/* Two labels, because there are two cases and one of them would be
@@ -432,23 +428,59 @@ export function FeedbackForm({
                      reason it can be offered here at all. */
                   'You are welcome to leave a public review as well. We ask everyone, whatever they told us.'}
             </p>
-            <a
-              href={result.googleReviewUrl}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => {
-                setTapped(true);
-                tappedRef.current = true;
-                // Fire and forget — awaiting it would turn the tap into a
-                // pop-up the browser blocks.
-                const key = result.feedbackId || appointmentId;
-                if (key) void apiPost(`public/feedback/${key}/google`, {}).catch(() => {});
-              }}
-              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
-            >
-              <Star className="h-4 w-4 fill-white" />
-              Write a Google review
-            </a>
+            {/**
+              * HELD UNTIL THE WORDS ARE READY — IN THE BUTTON'S OWN PLACE.
+              *
+              * The whole point of the suggestions is that somebody arrives at
+              * Google with a sentence already in their clipboard. A live button
+              * beside a spinner defeats that completely: the tap is one second
+              * away and the draft is three, so the draft loses every time and
+              * the customer lands on an empty box they will close.
+              *
+              * So the wait happens HERE, in the space the button will occupy —
+              * same height, same width, same corner radius, so nothing moves
+              * when it resolves. A button that shifts the instant somebody
+              * reaches for it is how people press whatever took its place.
+              *
+              * Not a disabled <button>, and not an overlay over the page. A
+              * disabled control reads as something broken; an overlay on a
+              * thank-you screen reads as another obstacle between them and the
+              * door. This reads as the thing being got ready, which is what it
+              * is — and it clears itself in four seconds whatever happens.
+              */}
+            {ready ? (
+              <a
+                href={result.googleReviewUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => {
+                  setTapped(true);
+                  tappedRef.current = true;
+                  // Fire and forget — awaiting it would turn the tap into a
+                  // pop-up the browser blocks.
+                  const key = result.feedbackId || appointmentId;
+                  if (key) void apiPost(`public/feedback/${key}/google`, {}).catch(() => {});
+                }}
+                className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
+              >
+                <Star className="h-4 w-4 fill-white" />
+                Write a Google review
+              </a>
+            ) : (
+              <div
+                className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-50 px-5 text-sm font-medium text-brand-800"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                {/* "Getting your words ready", not "writing your review for
+                    you". Nothing here posts anything on anybody's behalf and
+                    nothing can, and a label that hints otherwise is both untrue
+                    and the kind of claim Google takes a dim view of. What is
+                    being prepared is their own words, tidied. */}
+                Getting your words ready…
+              </div>
+            )}
             {tapped ? <p className="mt-2 text-xs text-ink-subtle">Thank you — that really does help.</p> : null}
           </>
         ) : (
