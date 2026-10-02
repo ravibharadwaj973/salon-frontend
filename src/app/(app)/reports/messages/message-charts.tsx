@@ -1,6 +1,7 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CHART } from '@/components/ui/chart';
 import { AlertTriangle, Ban, Check } from 'lucide-react';
 import { count, dayjs, percent } from '@/lib/format';
 
@@ -27,15 +28,15 @@ import { count, dayjs, percent } from '@/lib/format';
  */
 
 // Validated: worst all-pairs CVD ΔE 12.3, normal-vision ΔE 18.0, all ≥ 3:1 contrast.
-const ARRIVED = '#2a78d6';
-const FAILED = '#EA580C';
+const ARRIVED = CHART.series2;
+const FAILED = CHART.series1;
 const NOT_SENT = '#8c857f';
 
 // Single-hue ordinal ramp, light → dark, monotone lightness, light end 2.06:1.
 const FUNNEL_RAMP = ['#86b6ef', '#5598e7', '#2a78d6', '#184f95'];
 
-const GRID = '#E7E5E4';
-const AXIS_TEXT = '#78716C';
+const GRID = CHART.grid;
+const AXIS_TEXT = CHART.axisText;
 
 const axisProps = {
   stroke: GRID,

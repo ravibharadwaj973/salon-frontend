@@ -13,61 +13,19 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { CHART, TooltipCard, axisProps } from '@/components/ui/chart';
 import { dayjs, money, moneyCompact, percent } from '@/lib/format';
 import type { Money } from '@/lib/types';
 
 /**
- * Chart palette — validated with the data-viz colour checks (lightness band,
- * chroma floor, CVD separation, normal-vision floor, contrast) against the light
- * surface, all pairs. Two categorical slots is all this app needs; anything more
- * folds into "Other" rather than inventing hues.
- *
- * Re-validated when the brand moved from plum to orange: orange/blue separates
- * at ΔE 26.5 for protanopia and 34.8 for normal vision, comfortably above the
- * floor. Changing SERIES_1 again means running the checker again — two hues
- * that look fine to you can be the same colour to a colourblind owner reading
- * their own takings.
+ * The palette, the axis defaults and the tooltip card now live in one module --
+ * see the note there on why four copies of a validated colour pair is a hazard.
+ * These aliases keep the series names in this file about what they MEAN.
  */
-const SERIES_1 = '#EA580C'; // brand orange — the primary measure
-const SERIES_2 = '#2a78d6'; // blue — the comparison measure
-const GRID = '#E7E5E4';
-const AXIS_TEXT = '#78716C';
-
-const axisProps = {
-  stroke: GRID,
-  tick: { fill: AXIS_TEXT, fontSize: 11 },
-  tickLine: false,
-  axisLine: { stroke: GRID },
-};
-
-function TooltipCard({
-  active,
-  payload,
-  label,
-  formatter,
-}: {
-  active?: boolean;
-  payload?: { name?: string; value?: number | string; color?: string; dataKey?: string }[];
-  label?: string | number;
-  formatter?: (value: number) => string;
-}) {
-  if (!active || !payload?.length) return null;
-
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-pop">
-      <p className="mb-1 text-2xs font-medium text-ink-muted">{label}</p>
-      {payload.map((entry) => (
-        <p key={entry.dataKey ?? entry.name} className="flex items-center gap-2 text-xs">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden />
-          <span className="text-ink-muted">{entry.name}</span>
-          <span className="tnum ml-auto font-medium text-ink">
-            {formatter ? formatter(Number(entry.value)) : String(entry.value)}
-          </span>
-        </p>
-      ))}
-    </div>
-  );
-}
+const SERIES_1 = CHART.series1; // brand orange -- the primary measure
+const SERIES_2 = CHART.series2; // blue -- the comparison measure
+const GRID = CHART.grid;
+const AXIS_TEXT = CHART.axisText;
 
 // ------------------------------------------------------------ revenue trend --
 

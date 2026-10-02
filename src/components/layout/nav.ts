@@ -19,6 +19,7 @@ import {
   Sparkles,
   Star,
   Target,
+  TrendingUp,
   Users,
   Wallet,
   Send,
@@ -87,6 +88,10 @@ export const NAV: NavGroup[] = [
       { href: '/leads', label: 'Leads', icon: Target, permissions: [P.LEAD_VIEW], feature: 'leads' },
       { href: '/segments', label: 'Segments', icon: ClipboardList, permissions: [P.CAMPAIGN_VIEW], feature: 'segments' },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permissions: [P.CAMPAIGN_VIEW], feature: 'marketing' },
+      // No feature gate, matching the route: finding out which reel fills your
+      // Saturdays is arithmetic over the salon's own bookings, and charging a
+      // Starter salon for arithmetic would be indefensible.
+      { href: '/ad-results', label: 'Ad results', icon: TrendingUp, permissions: [P.CAMPAIGN_VIEW] },
       { href: '/journeys', label: 'Journeys', icon: Workflow, permissions: [P.CAMPAIGN_VIEW], feature: 'journeys' },
       { href: '/templates', label: 'Templates', icon: BadgePercent, permissions: [P.CAMPAIGN_VIEW] },
       { href: '/automations', label: 'Automations', icon: Workflow, permissions: [P.CAMPAIGN_VIEW] },

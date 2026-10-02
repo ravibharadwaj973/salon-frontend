@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { CHART } from '@/components/ui/chart';
 import { count } from '@/lib/format';
 import type { MonthUsage } from '@/lib/types';
 
@@ -52,13 +53,13 @@ import type { MonthUsage } from '@/lib/types';
  * carries every figure exactly.
  */
 const SERIES = [
-  { key: 'whatsapp', label: 'WhatsApp', color: '#EA580C' },
-  { key: 'sms', label: 'SMS', color: '#2a78d6' },
+  { key: 'whatsapp', label: 'WhatsApp', color: CHART.series1 },
+  { key: 'sms', label: 'SMS', color: CHART.series2 },
   { key: 'email', label: 'Email', color: '#1baf7a' },
 ] as const;
 
-const GRID = '#E7E5E4';
-const AXIS_TEXT = '#78716C';
+const GRID = CHART.grid;
+const AXIS_TEXT = CHART.axisText;
 
 interface Row {
   month: string;

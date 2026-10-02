@@ -1,6 +1,7 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CHART } from '@/components/ui/chart';
 import { count, date, dayjs } from '@/lib/format';
 
 /**
@@ -36,9 +37,9 @@ import { count, date, dayjs } from '@/lib/format';
  */
 
 // The app's validated single hue. Clears 3:1 against the card surface.
-const RUNS = '#2a78d6';
-const GRID = '#E7E5E4';
-const AXIS_TEXT = '#78716C';
+const RUNS = CHART.series2;
+const GRID = CHART.grid;
+const AXIS_TEXT = CHART.axisText;
 
 const axisProps = {
   stroke: GRID,
