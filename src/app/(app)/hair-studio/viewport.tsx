@@ -1,0 +1,154 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
+import type { FaceShape } from '../hairstyles/types';
+import { HairMesh } from './hair-mesh';
+import { Lights, Mannequin, Salon } from './scene';
+import type { GenerateOptions } from './hair/generate';
+import type { DesignSpec } from './hair/spec';
+
+/**
+ * Six angles, because they are the six a stylist checks.
+ *
+ * The model faces +Z, so "left" is the model's left and the camera sits on +X
+ * to see it — the same way a stylist says it, not the way a viewer would.
+ */
+export const VIEWS = {
+  FRONT: [0, -0.2, 7.6],
+  FRONT_LEFT: [5.4, 0.1, 5.4],
+  LEFT: [7.6, -0.2, 0],
+  BACK: [0, 0.1, -7.6],
+  RIGHT: [-7.6, -0.2, 0],
+  FRONT_RIGHT: [-5.4, 0.1, 5.4],
+} as const satisfies Record<string, readonly [number, number, number]>;
+
+export type ViewName = keyof typeof VIEWS;
+
+export const VIEW_LABELS: Record<ViewName, string> = {
+  FRONT: 'Front',
+  FRONT_LEFT: 'Front left',
+  LEFT: 'Left',
+  BACK: 'Back',
+  RIGHT: 'Right',
+  FRONT_RIGHT: 'Front right',
+};
+
+/*
+  * Framed on the hair, not the head. Very long hair reaches to about y = -3, so
+  * a target at the crown puts half the haircut below the viewport — which is
+  * what the first render did, and the reason the long styles were unreadable.
+  */
+const TARGET = new THREE.Vector3(0, -0.9, 0);
+
+/**
+ * Flies the camera to a preset and then gets out of the way.
+ *
+ * Snapping is disorienting — you lose track of which side of the head you are
+ * looking at, which is the one thing the angle buttons exist to tell you. The
+ * animation stops as soon as it is close enough, so dragging straight after
+ * pressing a button is never fought.
+ */
+function CameraRig({ view, nonce }: { view: ViewName; nonce: number }) {
+  const { camera, controls } = useThree();
+  const goal = useRef<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    goal.current = new THREE.Vector3(...VIEWS[view]);
+  }, [view, nonce]);
+
+  useFrame((_, delta) => {
+    if (!goal.current) return;
+    const k = 1 - Math.pow(0.0001, delta);
+    camera.position.lerp(goal.current, k);
+    const orbit = controls as { target?: THREE.Vector3; update?: () => void } | null;
+    orbit?.target?.lerp(TARGET, k);
+    orbit?.update?.();
+    if (camera.position.distanceTo(goal.current) < 0.02) goal.current = null;
+  });
+
+  return null;
+}
+
+/** Cancels a fly-to the moment the person takes the camera themselves. */
+function StopOnDrag({ onDrag }: { onDrag: () => void }) {
+  const { controls } = useThree();
+  useEffect(() => {
+    const orbit = controls as unknown as { addEventListener?: (e: string, f: () => void) => void; removeEventListener?: (e: string, f: () => void) => void } | null;
+    if (!orbit?.addEventListener) return;
+    orbit.addEventListener('start', onDrag);
+    return () => orbit.removeEventListener?.('start', onDrag);
+  }, [controls, onDrag]);
+  return null;
+}
+
+export function Viewport({
+  spec,
+  face,
+  options,
+  view,
+  viewNonce,
+  onUserTookCamera,
+}: {
+  spec: DesignSpec;
+  face: FaceShape;
+  options: GenerateOptions;
+  view: ViewName;
+  viewNonce: number;
+  onUserTookCamera: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="flex h-full items-center justify-center p-8 text-center">
+        <p className="max-w-sm text-sm text-ink-muted">
+          This browser could not start 3D. The studio needs WebGL, which is usually turned off by a hardware-acceleration
+          setting rather than missing — everything else in Parlon works without it.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Canvas
+      shadows
+      // Capped rather than uncapped: a retina screen at full ratio quadruples
+      // the pixels for a difference nobody sees on hair this fine.
+      dpr={[1, 1.75]}
+      camera={{ position: [...VIEWS.FRONT], fov: 32, near: 0.1, far: 60 }}
+      gl={{ antialias: true, preserveDrawingBuffer: true }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.05;
+      }}
+      onError={() => setFailed(true)}
+    >
+      <color attach="background" args={['#efe9e2']} />
+      <fog attach="fog" args={['#efe9e2', 9, 20]} />
+
+      <Lights />
+      <Salon />
+      <Mannequin face={face} spec={spec} options={options} />
+      <HairMesh spec={spec} face={face} options={options} />
+
+      <OrbitControls
+        makeDefault
+        target={TARGET}
+        enablePan={false}
+        minDistance={3.5}
+        maxDistance={14}
+        // Stops short of the floor and the ceiling: there is nothing to learn
+        // from underneath a haircut, and getting stuck under one is annoying.
+        minPolarAngle={0.5}
+        maxPolarAngle={2.1}
+        enableDamping
+        dampingFactor={0.08}
+      />
+      <CameraRig view={view} nonce={viewNonce} />
+      <StopOnDrag onDrag={onUserTookCamera} />
+    </Canvas>
+  );
+}

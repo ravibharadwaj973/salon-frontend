@@ -72,6 +72,9 @@ export const NAV: NavGroup[] = [
       // what the customer pays for, a style is what they ask for, and one
       // service covers twenty styles.
       { href: '/hairstyles', label: 'Hairstyles', icon: Wand2, permissions: [P.SERVICE_VIEW] },
+      // The studio itself sits with the things you do WITH a customer rather
+      // than with the menu you maintain once.
+      { href: '/hair-studio', label: 'Hair studio', icon: Sparkles, permissions: [P.SERVICE_VIEW] },
       { href: '/staff', label: 'Staff', icon: Sparkles, permissions: [P.STAFF_VIEW, P.STAFF_SELF] },
     ],
   },
