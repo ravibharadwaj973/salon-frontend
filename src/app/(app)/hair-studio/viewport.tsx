@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import * as THREE from 'three';
 import type { FaceShape } from '../hairstyles/types';
 import { HairMesh } from './hair-mesh';
@@ -54,6 +55,36 @@ function StopOnDrag({ onDrag }: { onDrag: () => void }) {
   return null;
 }
 
+/**
+ * IMAGE-BASED LIGHTING, BUILT RATHER THAN DOWNLOADED.
+ *
+ * Anisotropic hair needs something to reflect. Three point lights give it four
+ * hard glints and nothing in between; what makes hair look expensive is a soft
+ * environment wrapping round it, so the highlight travels as the head turns.
+ *
+ * RoomEnvironment is a little box of emissive panels that ships inside three
+ * itself, so this costs no HDRI download, no CDN and no extra megabyte — which
+ * matters for a salon on a phone connection.
+ */
+function Studio() {
+  const { gl, scene } = useThree();
+
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const target = pmrem.fromScene(room, 0.04);
+    scene.environment = target.texture;
+    return () => {
+      // Both, or the texture leaks every time the studio is reopened.
+      target.dispose();
+      pmrem.dispose();
+      scene.environment = null;
+    };
+  }, [gl, scene]);
+
+  return null;
+}
+
 export function Viewport({
   spec,
   face,
@@ -92,13 +123,14 @@ export function Viewport({
       gl={{ antialias: true, preserveDrawingBuffer: true }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
+        gl.toneMappingExposure = 0.92;
       }}
       onError={() => setFailed(true)}
     >
       <color attach="background" args={['#efe9e2']} />
       <fog attach="fog" args={['#efe9e2', 9, 20]} />
 
+      <Studio />
       <Lights />
       <Salon />
       <Mannequin face={face} spec={spec} options={options} />

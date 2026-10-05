@@ -212,7 +212,16 @@ export function Salon() {
 export function Lights() {
   return (
     <>
-      <hemisphereLight args={['#fff6ec', '#7a6d62', 1.05]} />
+      {/*
+        REBALANCED FOR THE ENVIRONMENT MAP.
+        
+        These values were tuned when three lights were ALL the light there was.
+        Adding image-based lighting on top without touching them doubled the
+        exposure: a dark brown rendered as blonde and the room went white. The
+        environment now supplies the ambient fill, so the hemisphere is a trim
+        rather than a light source.
+      */}
+      <hemisphereLight args={['#fff6ec', '#7a6d62', 0.22]} />
       {/*
         Tightened onto the head and doubled in resolution. At 1024 across ten
         units the hair's own shadow fell on the face in hard blotches, which
@@ -220,7 +229,7 @@ export function Lights() {
       */}
       <directionalLight
         position={[3.5, 5, 4.5]}
-        intensity={1.5}
+        intensity={1.05}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={1}
@@ -232,8 +241,10 @@ export function Lights() {
         shadow-bias={-0.0008}
         shadow-normalBias={0.02}
       />
-      <directionalLight position={[-4.5, 2, 3]} intensity={0.55} color="#dfe8ff" />
-      <directionalLight position={[0, 3.5, -5]} intensity={1.6} color="#ffd9b0" />
+      <directionalLight position={[-4.5, 2, 3]} intensity={0.28} color="#dfe8ff" />
+      {/* The rim stays strong. It is what draws the outline of the hair, and
+          the environment cannot do that job — it has no direction. */}
+      <directionalLight position={[0, 3.5, -5]} intensity={1.15} color="#ffd9b0" />
     </>
   );
 }

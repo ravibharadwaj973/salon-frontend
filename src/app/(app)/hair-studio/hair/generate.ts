@@ -169,6 +169,16 @@ export interface HairGeometry {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
+  /**
+   * WHICH WAY THE STRAND RUNS, per vertex (xyz + handedness).
+   *
+   * This is what turns hair from felt into hair. A specular highlight on hair
+   * is ANISOTROPIC: it stretches into a band running across the strands rather
+   * than pooling into a round dot, because each strand is a cylinder and
+   * reflects along its length. The renderer cannot work that out from position
+   * and normal alone -- it has to be told the strand direction, and this is it.
+   */
+  tangents: Float32Array;
   indices: Uint32Array;
   strandCount: number;
   vertexCount: number;
@@ -264,6 +274,7 @@ export function generateHair(spec: DesignSpec, options: GenerateOptions = {}): H
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
   const colors = new Float32Array(vertexCount * 3);
+  const tangents = new Float32Array(vertexCount * 4);
   const indices = new Uint32Array(strands * SEGMENTS * 6);
 
   // Thinner cards when there are more of them, so coverage stays even. The
@@ -471,6 +482,11 @@ export function generateHair(spec: DesignSpec, options: GenerateOptions = {}): H
         normals[v * 3] = ox;
         normals[v * 3 + 1] = oy;
         normals[v * 3 + 2] = oz;
+        // Along the strand, which is where the highlight has to run.
+        tangents[v * 4] = dx;
+        tangents[v * 4 + 1] = dy;
+        tangents[v * 4 + 2] = dz;
+        tangents[v * 4 + 3] = 1;
         colors[v * 3] = cr;
         colors[v * 3 + 1] = cg;
         colors[v * 3 + 2] = cb;
@@ -490,5 +506,5 @@ export function generateHair(spec: DesignSpec, options: GenerateOptions = {}): H
     }
   }
 
-  return { positions, normals, colors, indices, strandCount: strands, vertexCount };
+  return { positions, normals, colors, tangents, indices, strandCount: strands, vertexCount };
 }
