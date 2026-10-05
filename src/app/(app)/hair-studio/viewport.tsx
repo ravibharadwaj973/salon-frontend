@@ -9,38 +9,8 @@ import { HairMesh } from './hair-mesh';
 import { Lights, Mannequin, Salon } from './scene';
 import type { GenerateOptions } from './hair/generate';
 import type { DesignSpec } from './hair/spec';
+import { VIEWS, type ViewName } from './views';
 
-/**
- * Six angles, because they are the six a stylist checks.
- *
- * The model faces +Z, so "left" is the model's left and the camera sits on +X
- * to see it — the same way a stylist says it, not the way a viewer would.
- */
-export const VIEWS = {
-  FRONT: [0, -0.2, 7.6],
-  FRONT_LEFT: [5.4, 0.1, 5.4],
-  LEFT: [7.6, -0.2, 0],
-  BACK: [0, 0.1, -7.6],
-  RIGHT: [-7.6, -0.2, 0],
-  FRONT_RIGHT: [-5.4, 0.1, 5.4],
-} as const satisfies Record<string, readonly [number, number, number]>;
-
-export type ViewName = keyof typeof VIEWS;
-
-export const VIEW_LABELS: Record<ViewName, string> = {
-  FRONT: 'Front',
-  FRONT_LEFT: 'Front left',
-  LEFT: 'Left',
-  BACK: 'Back',
-  RIGHT: 'Right',
-  FRONT_RIGHT: 'Front right',
-};
-
-/*
-  * Framed on the hair, not the head. Very long hair reaches to about y = -3, so
-  * a target at the crown puts half the haircut below the viewport — which is
-  * what the first render did, and the reason the long styles were unreadable.
-  */
 const TARGET = new THREE.Vector3(0, -0.9, 0);
 
 /**

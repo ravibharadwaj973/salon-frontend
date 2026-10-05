@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { apiPatch, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, FormRow, Input, Select, Textarea } from '@/components/ui/form';
@@ -145,12 +145,20 @@ export function HairstyleEditor({
   kinds,
   services,
   style,
-  trigger,
+  as = 'button',
 }: {
   kinds: HairstyleKind[];
   services: ServiceOption[];
   style?: Hairstyle;
-  trigger?: (open: () => void) => React.ReactNode;
+  /*
+   * A STRING, NOT A RENDER PROP.
+   *
+   * This component is used from a SERVER component, and a server component may
+   * not pass a function to a client one: React has to serialise the props over
+   * the wire and a closure cannot cross that boundary. It typechecks and it
+   * builds; it throws on every render, which is how it reached production.
+   */
+  as?: 'button' | 'icon';
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -256,8 +264,15 @@ export function HairstyleEditor({
 
   return (
     <>
-      {trigger ? (
-        trigger(show)
+      {as === 'icon' ? (
+        <button
+          type="button"
+          onClick={show}
+          aria-label={style ? `Edit ${style.name}` : 'Edit style'}
+          className="rounded-md p-1.5 text-ink-subtle hover:bg-stone-100 hover:text-ink"
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden />
+        </button>
       ) : (
         <Button onClick={show}>
           <Plus className="h-4 w-4" />

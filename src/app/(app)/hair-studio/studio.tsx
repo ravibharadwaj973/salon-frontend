@@ -12,7 +12,9 @@ import { cn } from '@/lib/cn';
 import { money } from '@/lib/format';
 import type { FaceShape, HairDensity, HairLength, HairTexture, Hairstyle } from '../hairstyles/types';
 import { Controls, type StudioState } from './controls';
-import { VIEWS, VIEW_LABELS, type ViewName } from './viewport';
+// From views.ts, NOT from ./viewport: importing it from there drags three.js
+// into the server bundle and defeats the ssr:false below.
+import { VIEWS, VIEW_LABELS, type ViewName } from './views';
 import { DEFAULT_CONFIG, type DesignConfig, type DesignSpec } from './hair/spec';
 
 /**

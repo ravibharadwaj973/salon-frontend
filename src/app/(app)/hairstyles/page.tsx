@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Pencil, Scissors } from 'lucide-react';
+import { Scissors } from 'lucide-react';
 import { apiFetchList, apiFetchSafe } from '@/lib/api';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/display';
 import { TBody, TD, TH, THead, TR, Table, TableFooterNote } from '@/components/ui/table';
@@ -135,21 +135,7 @@ export default async function HairstylesPage() {
                     </TD>
                     <TD align="right">
                       {canManage ? (
-                        <HairstyleEditor
-                          kinds={kindList}
-                          services={serviceOptions}
-                          style={style}
-                          trigger={(open) => (
-                            <button
-                              type="button"
-                              onClick={open}
-                              aria-label={`Edit ${style.name}`}
-                              className="rounded-md p-1.5 text-ink-subtle hover:bg-stone-100 hover:text-ink"
-                            >
-                              <Pencil className="h-3.5 w-3.5" aria-hidden />
-                            </button>
-                          )}
-                        />
+                        <HairstyleEditor kinds={kindList} services={serviceOptions} style={style} as="icon" />
                       ) : null}
                     </TD>
                   </TR>
