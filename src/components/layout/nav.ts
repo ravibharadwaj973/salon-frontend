@@ -21,6 +21,7 @@ import {
   Target,
   TrendingUp,
   Users,
+  Wand2,
   Wallet,
   Send,
   Workflow,
@@ -67,6 +68,10 @@ export const NAV: NavGroup[] = [
       },
       { href: '/customers', label: 'Customers', icon: Users, permissions: [P.CUSTOMER_VIEW] },
       { href: '/services', label: 'Services', icon: Scissors, permissions: [P.SERVICE_VIEW] },
+      // Beside Services, because the two are halves of one menu: a service is
+      // what the customer pays for, a style is what they ask for, and one
+      // service covers twenty styles.
+      { href: '/hairstyles', label: 'Hairstyles', icon: Wand2, permissions: [P.SERVICE_VIEW] },
       { href: '/staff', label: 'Staff', icon: Sparkles, permissions: [P.STAFF_VIEW, P.STAFF_SELF] },
     ],
   },

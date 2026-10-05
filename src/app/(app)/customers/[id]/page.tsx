@@ -26,6 +26,7 @@ import { EditCustomerButton } from './edit-customer-button';
 import { ConsentEditor } from './consent-editor';
 import { MessagingCard, type CustomerMessaging } from './messaging-card';
 import { EngagementCard, type CustomerEngagement } from './engagement-card';
+import { HairDesignsCard, type HairDesignHistory } from './hair-designs-card';
 import { date, dateTime, fromNow, fullName, money, phone as formatPhone, time } from '@/lib/format';
 import type {
   Appointment,
@@ -108,12 +109,19 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     shows('photos') ? apiFetchSafe<CustomerPhoto[]>(`/customers/${id}/photos`) : Promise.resolve(null),
   ]);
 
-  const [messaging, engagement] = await Promise.all([
+  const [messaging, engagement, hairDesigns] = await Promise.all([
     shows('messaging') ? apiFetchSafe<CustomerMessaging>(`/analytics/messaging/customer/${id}`) : Promise.resolve(null),
     // Alongside messaging rather than inside it: what was SENT to somebody and
     // what they then did are different questions, and the second one is only
     // ever answerable for a customer who tapped a link.
     apiFetchSafe<CustomerEngagement>(`/customers/${id}/engagement`),
+    /*
+     * No `shows()` gate: the saved-look history is not one of the profile
+     * sections a salon can switch off, and apiFetchSafe already turns a 403 for
+     * somebody without customer.view into null rather than taking the page
+     * down.
+     */
+    apiFetchSafe<HairDesignHistory>(`/hair-studio/designs/history/${id}`),
   ]);
 
   const canManage = user?.permissions.includes('customer.manage') ?? false;
@@ -328,6 +336,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           ) : null}
 
           {shows('notes') ? <CustomerNotes customerId={customer.id} initialNote={customer.notes} /> : null}
+
+          {/* Saved looks. Above the photos because it is the thing a stylist
+              asks about first, and a photo without the design behind it is a
+              picture nobody can reproduce. */}
+          {hairDesigns ? <HairDesignsCard history={hairDesigns} /> : null}
 
           {/* Photos */}
           {shows('photos') && photos && photos.length > 0 ? (
