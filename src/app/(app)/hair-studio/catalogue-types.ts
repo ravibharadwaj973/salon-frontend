@@ -75,6 +75,14 @@ export interface Hairstyle {
    */
   thumbnailUrl: string | null;
   /**
+   * The hair, cut out of previewUrl: white where the hair is, black elsewhere.
+   *
+   * Null means the style has a photograph nobody has masked yet, so it can be
+   * shown but not recoloured — which the studio says in words rather than by
+   * offering controls that do nothing.
+   */
+  maskUrl: string | null;
+  /**
    * How many saved looks in THIS salon use this style.
    *
    * What makes a "most chosen" tab a fact rather than a label. Optional because

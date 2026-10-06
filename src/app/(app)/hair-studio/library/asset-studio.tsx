@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Check, ImageOff, Sparkles, Wand2 } from 'lucide-react';
+import { Check, ImageOff, Scissors, Sparkles, Wand2 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Badge, Spinner } from '@/components/ui/display';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
+import { MaskEditor } from './mask-editor';
 import {
   DENSITY_LABELS,
   FACE_SHAPE_LABELS,
@@ -225,6 +226,7 @@ function StyleDrawer({
   const [references, setReferences] = useState<Reference[]>([]);
   const [drawing, setDrawing] = useState(false);
   const [polls, setPolls] = useState(0);
+  const [maskOpen, setMaskOpen] = useState(false);
 
   // What to draw. Defaults chosen by the server when these are left alone.
   const [texture, setTexture] = useState<HairTexture | ''>('');
@@ -451,6 +453,38 @@ function StyleDrawer({
             )}
           </div>
 
+          {/*
+            THE STEP THAT PAYS FOR ITSELF.
+            
+            Sits directly under the published picture because it is about THAT
+            picture, and it is offered the moment one exists — a photograph with
+            no cut-out is a style the studio can show but not recolour, which is
+            half a feature.
+          */}
+          {style.previewUrl ? (
+            <button
+              type="button"
+              onClick={() => setMaskOpen(true)}
+              className={cn(
+                'flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+                style.maskUrl
+                  ? 'border-stone-300 text-ink-muted hover:text-ink'
+                  : 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100',
+              )}
+            >
+              <Scissors className="h-3.5 w-3.5" aria-hidden />
+              {style.maskUrl ? 'Re-cut the hair' : 'Cut out the hair'}
+            </button>
+          ) : null}
+
+          {style.previewUrl && !style.maskUrl ? (
+            <p className="rounded-lg bg-amber-50 p-2.5 text-2xs leading-relaxed text-amber-900">
+              Until the hair is cut out of this picture, the studio can show this style but cannot recolour it. It takes
+              about twenty seconds, once — and then every colour, highlight and painted section is instant and costs
+              nothing.
+            </p>
+          ) : null}
+
           {!generationReady ? (
             <p className="rounded-lg bg-stone-50 p-3 text-2xs leading-relaxed text-ink-muted">
               Picture generation is not switched on for this server. Everything else here works — the 3D studio draws
@@ -547,6 +581,17 @@ function StyleDrawer({
           )}
         </div>
       </div>
+
+      {maskOpen && style.previewUrl ? (
+        <MaskEditor
+          open
+          onClose={() => setMaskOpen(false)}
+          catalogId={style.id}
+          photoUrl={style.previewUrl}
+          existingMaskUrl={style.maskUrl}
+          onSaved={onChanged}
+        />
+      ) : null}
     </Modal>
   );
 }
