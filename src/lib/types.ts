@@ -358,6 +358,23 @@ export interface Appointment {
   services: AppointmentServiceLine[];
   invoice: { id: string; invoiceNumber: string; grandTotal: Money; status: string; dueAmount: Money } | null;
   feedback?: { id: string; rating: number; comment: string | null } | null;
+  /**
+   * THE LOOK THE CUSTOMER AGREED TO, carried on the appointment that will cut it.
+   *
+   * Optional because older callers and the calendar's own column payload do not
+   * include it, and a type that insisted would break every one of them for a
+   * field only the drawer reads.
+   */
+  hairDesigns?: {
+    id: string;
+    name: string;
+    hairstyleKey: string;
+    texture: string;
+    length: string;
+    baseColor: string;
+    notes: string | null;
+    catalog: { id: string; name: string; previewUrl: string | null } | null;
+  }[];
 }
 
 export interface CalendarColumn {

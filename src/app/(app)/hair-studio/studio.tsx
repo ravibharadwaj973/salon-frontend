@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Camera, CalendarPlus, RotateCcw, Save, Wand2 } from 'lucide-react';
+import { Camera, CalendarPlus, Images, RotateCcw, Save, Wand2 } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/form';
@@ -15,6 +15,7 @@ import { Controls, type StudioState } from './controls';
 import { PhotoPreview } from './photo-preview';
 import { Advisor } from './advisor';
 import { CanvasBoundary } from './canvas-boundary';
+import { LookBook } from './look-book';
 // From views.ts, NOT from ./viewport: importing it from there drags three.js
 // into the server bundle and defeats the ssr:false below.
 import { VIEWS, VIEW_LABELS, type ViewName } from './views';
@@ -160,6 +161,7 @@ export function Studio({
   const [savedName, setSavedName] = useState(initialDesign?.name ?? '');
   const [photoOpen, setPhotoOpen] = useState(false);
   const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [lookBookOpen, setLookBookOpen] = useState(false);
   const [painting, setPainting] = useState(false);
   /**
    * WHAT WAS LAST SAVED, SO "CHANGED SINCE" IS A FACT RATHER THAN A GUESS.
@@ -469,6 +471,23 @@ export function Studio({
             the afterthought.
           */}
           {/*
+            BROWSE FIRST, THEN ADVISE, THEN PHOTOGRAPH — the order of a real
+            consultation, top to bottom.
+            
+            Somebody flicking through to see what they like has not decided
+            anything yet, which is before "what would suit me" and well before
+            "what would it look like on me".
+          */}
+          <button
+            type="button"
+            onClick={() => setLookBookOpen(true)}
+            className="flex items-center justify-center gap-1.5 border-b border-stone-200 px-4 py-2 text-2xs font-medium text-ink-muted transition-colors hover:bg-stone-50 hover:text-ink"
+          >
+            <Images className="h-3.5 w-3.5" aria-hidden />
+            Explore hairstyles
+          </button>
+
+          {/*
             THE ADVISOR SITS ABOVE THE PHOTOGRAPH, AND ABOVE IN THE ORDER OF
             OPERATIONS TOO.
             
@@ -524,6 +543,19 @@ export function Studio({
           </div>
         </div>
       </div>
+
+      <LookBook
+        open={lookBookOpen}
+        onClose={() => setLookBookOpen(false)}
+        styles={styles}
+        onChoose={(catalogId) => {
+          // Through `change`, like the advisor, so the style's own limits
+          // re-bound everything underneath it rather than carrying a fade across
+          // from a taper to a bob.
+          change({ ...state, catalogId });
+          setLookBookOpen(false);
+        }}
+      />
 
       <Advisor
         open={advisorOpen}

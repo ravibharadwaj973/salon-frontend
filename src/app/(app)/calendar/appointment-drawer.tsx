@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CreditCard, ExternalLink, Globe, Phone, Receipt, User } from 'lucide-react';
+import { CalendarClock, CreditCard, ExternalLink, Globe, Phone, Receipt, Scissors, User } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Avatar, Badge, StatusBadge } from '@/components/ui/display';
@@ -227,6 +227,58 @@ export function AppointmentDrawer({
               <section>
                 <h3 className="mb-1.5 text-xs font-semibold text-ink">Notes</h3>
                 <p className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">{appointment.notes}</p>
+              </section>
+            ) : null}
+
+            {/*
+              THE LOOK THE CUSTOMER AGREED TO, WHERE THE PERSON CUTTING IT LOOKS.
+              
+              Above the invoice and below the notes on purpose: this is read
+              BEFORE the appointment, by the stylist opening tomorrow's diary,
+              while the invoice is read after. It is the point of the whole studio
+              — without it the agreement was recorded in one screen and lost on
+              the way to the chair.
+            */}
+            {appointment.hairDesigns?.length ? (
+              <section>
+                <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink">
+                  <Scissors className="h-3.5 w-3.5 text-ink-subtle" />
+                  The agreed look
+                </h3>
+                <div className="space-y-2">
+                  {appointment.hairDesigns.map((design) => (
+                    <Link
+                      key={design.id}
+                      href={`/hair-studio?design=${design.id}${appointment.customer ? `&customer=${appointment.customer.id}` : ''}`}
+                      className="flex items-center gap-3 rounded-lg border border-stone-200 p-2.5 hover:bg-stone-50"
+                    >
+                      {design.catalog?.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={design.catalog.previewUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" />
+                      ) : (
+                        // No reference picture for this style yet, so the colour
+                        // itself stands in — which is the thing most likely to be
+                        // wrong in the chair, and the easiest to recognise.
+                        <span
+                          className="h-10 w-10 shrink-0 rounded-md ring-1 ring-inset ring-stone-300"
+                          style={{ backgroundColor: design.baseColor }}
+                          aria-hidden
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-ink">{design.name}</p>
+                        <p className="truncate text-xs text-ink-muted">
+                          {design.catalog?.name ?? design.hairstyleKey.replace(/_/g, ' ')} ·{' '}
+                          {design.texture.toLowerCase()} · {design.length.toLowerCase().replace('_', ' ')}
+                        </p>
+                        {design.notes ? (
+                          <p className="truncate text-2xs text-ink-subtle">{design.notes}</p>
+                        ) : null}
+                      </div>
+                      <ExternalLink className="h-3.5 w-3.5 text-ink-subtle" />
+                    </Link>
+                  ))}
+                </div>
               </section>
             ) : null}
 

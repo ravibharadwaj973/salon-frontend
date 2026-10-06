@@ -9,7 +9,7 @@ import { apiGet } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Card, EmptyState } from '@/components/ui/display';
 import { dayjs, duration, fullName, time, today } from '@/lib/format';
-import { BookingModal } from './booking-modal';
+import { BookingModal, type BookingPreset } from './booking-modal';
 import { AppointmentDrawer } from './appointment-drawer';
 import type { CalendarColumn, CalendarResponse, Service, Staff } from '@/lib/types';
 
@@ -44,6 +44,7 @@ export function CalendarBoard({
   serviceGroups,
   staff,
   openAppointmentId,
+  preset,
   canManage,
 }: {
   initial: CalendarResponse;
@@ -52,10 +53,23 @@ export function CalendarBoard({
   serviceGroups: { id: string; name: string; services: Service[] }[];
   staff: Staff[];
   openAppointmentId: string | null;
+  /** What the hair studio asked to book. See the calendar page. */
+  preset: BookingPreset | null;
   canManage: boolean;
 }) {
   const router = useRouter();
-  const [booking, setBooking] = useState<{ staffId?: string; startAt?: string } | null>(null);
+  /**
+   * ARRIVING FROM THE STUDIO OPENS THE FORM, RATHER THAN HINTING AT IT.
+   *
+   * Somebody who has just pressed "Book it" at the end of a consultation has
+   * already decided. Landing them on a calendar with the booking one more click
+   * away is the point at which a customer standing at the counter starts talking
+   * about something else.
+   *
+   * Initialised rather than set in an effect, so the modal is there on the first
+   * paint and the screen does not flash the empty diary first.
+   */
+  const [booking, setBooking] = useState<{ staffId?: string; startAt?: string } | null>(preset ? {} : null);
   const [selectedId, setSelectedId] = useState<string | null>(openAppointmentId);
 
   const { data: calendar = initial, refetch } = useQuery({
@@ -258,6 +272,7 @@ export function CalendarBoard({
           serviceGroups={serviceGroups}
           staff={staff}
           branchId={calendar.branch.id}
+          preset={preset}
         />
       ) : null}
 

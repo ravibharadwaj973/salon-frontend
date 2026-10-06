@@ -74,6 +74,13 @@ export interface Hairstyle {
    * previewUrl when that picture is not one we host.
    */
   thumbnailUrl: string | null;
+  /**
+   * How many saved looks in THIS salon use this style.
+   *
+   * What makes a "most chosen" tab a fact rather than a label. Optional because
+   * only the list endpoint counts it; a single style fetched on its own does not.
+   */
+  timesChosen?: number;
   branchId: string | null;
   isActive: boolean;
   sortOrder: number;

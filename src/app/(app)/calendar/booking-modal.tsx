@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Check, Clock, Search, UserPlus } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Scissors, Search, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ClientApiError, apiList, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,20 @@ function matchToCustomer(match: CustomerMatch): Customer {
   };
 }
 
+/**
+ * WHAT THE HAIR STUDIO ASKED TO BOOK.
+ *
+ * Carried in rather than refetched here: the page has already loaded all three
+ * and has the server's cookie to do it with. Every field is nullable because the
+ * ids come out of a url somebody may have bookmarked — a stale link opens an
+ * ordinary booking form rather than an error.
+ */
+export interface BookingPreset {
+  serviceId: string | null;
+  customer: { id: string; firstName: string; lastName: string } | null;
+  design: { id: string; name: string; notes: string | null } | null;
+}
+
 export function BookingModal({
   open,
   onClose,
@@ -48,6 +62,7 @@ export function BookingModal({
   serviceGroups,
   staff,
   branchId,
+  preset,
 }: {
   open: boolean;
   onClose: () => void;
@@ -58,17 +73,43 @@ export function BookingModal({
   serviceGroups: { id: string; name: string; services: Service[] }[];
   staff: Staff[];
   branchId: string;
+  preset?: BookingPreset | null;
 }) {
   const toast = useToast();
 
   const [search, setSearch] = useState('');
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomer] = useState<Customer | null>(
+    /*
+     * A partial customer, on purpose.
+     *
+     * The modal needs a name and an id to show who it is booking for; the rest of
+     * the record is for screens that display it. Filling the gaps with another
+     * fetch would mean the form could not open until it came back, and the
+     * receptionist is standing in front of the person it describes.
+     */
+    preset?.customer
+      ? ({
+          id: preset.customer.id,
+          firstName: preset.customer.firstName,
+          lastName: preset.customer.lastName,
+        } as Customer)
+      : null,
+  );
   const [walkIn, setWalkIn] = useState({ name: '', phone: '' });
   const [isWalkIn, setIsWalkIn] = useState(false);
-  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [serviceIds, setServiceIds] = useState<string[]>(preset?.serviceId ? [preset.serviceId] : []);
   const [staffId, setStaffId] = useState(defaultStaffId ?? '');
   const [startTime, setStartTime] = useState(defaultStartAt ? dayjs(defaultStartAt).format('HH:mm') : '10:00');
-  const [notes, setNotes] = useState('');
+  /*
+   * The design's own notes become the appointment's.
+   *
+   * That is the formula, the reference the customer brought in, whatever the
+   * stylist wrote down while they agreed it — and it is of no use at all sitting
+   * on a design record that the person doing the cut never opens.
+   */
+  const [notes, setNotes] = useState(
+    preset?.design ? [preset.design.name, preset.design.notes].filter(Boolean).join(' — ') : '',
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -197,7 +238,7 @@ export function BookingModal({
           force,
         });
       } else {
-        await apiPost('appointments', {
+        const appointment = await apiPost<{ id: string }>('appointments', {
           branchId,
           customerId: customer?.id,
           walkInName: customer ? undefined : walkIn.name.trim(),
@@ -208,6 +249,28 @@ export function BookingModal({
           services: serviceIds.map((serviceId) => ({ serviceId, staffId: staffId || undefined })),
           force,
         });
+
+        /**
+         * TIE THE AGREED LOOK TO THE APPOINTMENT THAT WILL CUT IT.
+         *
+         * The last link in the chain, and the reason any of the studio is worth
+         * having: the stylist opening this booking tomorrow sees the exact look
+         * the customer chose, rather than a note saying "layered bob" and a
+         * conversation nobody was present for.
+         *
+         * Deliberately AFTER the booking and deliberately not fatal. The
+         * appointment is the thing the customer is waiting for; if attaching the
+         * design fails, the booking still stands and the design is still on their
+         * record. Failing the whole thing here — after a slot has been taken —
+         * would be the worse outcome by a long way.
+         */
+        if (preset?.design) {
+          try {
+            await apiPost(`hair-studio/designs/${preset.design.id}/appointment`, { appointmentId: appointment.id });
+          } catch {
+            toast.toast('Booked, but the saved look could not be attached to it.', 'warning');
+          }
+        }
       }
 
       toast.success('Appointment booked');
@@ -269,6 +332,26 @@ export function BookingModal({
       }
     >
       <div className="space-y-5">
+        {/*
+          SAY WHAT CAME FROM THE STUDIO, so nobody wonders why the form is
+          already filled in.
+          
+          A booking form that opens with a service ticked and a customer chosen
+          looks like a bug if there is nothing on screen explaining it — and a
+          receptionist who does not trust the prefill will clear it and start
+          again, which loses the design link.
+        */}
+        {preset?.design ? (
+          <div className="flex items-start gap-2 rounded-lg bg-brand-50 p-2.5 text-xs text-brand-800">
+            <Scissors className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <p>
+              Booking the look <span className="font-medium">{preset.design.name}</span>
+              {preset.customer ? ` for ${preset.customer.firstName}` : ''}. It will be attached to this appointment, so
+              whoever does the cut can open exactly what was agreed.
+            </p>
+          </div>
+        ) : null}
+
         {error ? (
           <div className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">
             <p className="font-medium">{error}</p>
