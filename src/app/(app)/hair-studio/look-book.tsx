@@ -6,7 +6,16 @@ import { Badge } from '@/components/ui/display';
 import { Input } from '@/components/ui/form';
 import { Modal } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
-import { GENDER_LABELS, type HairLength, type HairTexture, type Hairstyle } from './catalogue-types';
+import {
+  COLOR_FAMILY_LABELS,
+  GENDER_LABELS,
+  SKIN_TONE_LABELS,
+  type HairColorFamily,
+  type HairLength,
+  type HairTexture,
+  type Hairstyle,
+  type SkinTone,
+} from './catalogue-types';
 
 /**
  * THE LOOK-BOOK — WHAT THE SALON OFFERS, AS PICTURES.
@@ -63,6 +72,67 @@ const TEXTURES: Record<'STRAIGHT' | 'CURLY', HairTexture[]> = {
 const supports = <T extends string>(list: T[], wanted: T[]) =>
   list.length === 0 || list.some((item) => wanted.includes(item));
 
+/**
+ * THE SECOND AND THIRD AXES.
+ *
+ * Length, texture and who it is for answer "what kind of cut". These answer
+ * "what does it LOOK like" and "does it look like me", which is what somebody
+ * flicking through a look-book is really doing — and the second of those is the
+ * one a salon most often has a gap in and cannot see until it is recorded.
+ *
+ * Both are about the PHOTOGRAPH rather than the cut. A style shown on black hair
+ * can still be worn blonde: the studio recolours it for nothing. What the chips
+ * filter is which picture is on the page.
+ */
+function axisChips<T extends string>(styles: Hairstyle[], pick: (style: Hairstyle) => T | null, labels: Record<T, string>) {
+  const present = new Set<T>();
+  for (const style of styles) {
+    const value = pick(style);
+    if (value) present.add(value);
+  }
+  // Only the ones the salon actually has. A filter that returns nothing teaches
+  // people the filters do not work.
+  return (Object.keys(labels) as T[]).filter((key) => present.has(key));
+}
+
+function AxisRow<T extends string>({
+  label,
+  options,
+  labels,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: T[];
+  labels: Record<T, string>;
+  value: T | null;
+  onChange: (next: T | null) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="w-16 shrink-0 text-2xs text-ink-subtle">{label}</span>
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={value === option}
+          // Clicking the chosen one clears it, so there is no "all" chip to
+          // explain and no state you can get stuck in.
+          onClick={() => onChange(value === option ? null : option)}
+          className={cn(
+            'rounded-full border px-2 py-0.5 text-2xs transition-colors',
+            value === option
+              ? 'border-brand-300 bg-brand-50 text-brand-700'
+              : 'border-stone-200 text-ink-muted hover:text-ink',
+          )}
+        >
+          {labels[option]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function LookBook({
   open,
   onClose,
@@ -76,6 +146,11 @@ export function LookBook({
 }) {
   const [group, setGroup] = useState<Group>('ALL');
   const [query, setQuery] = useState('');
+  const [colour, setColour] = useState<HairColorFamily | null>(null);
+  const [tone, setTone] = useState<SkinTone | null>(null);
+
+  const colours = useMemo(() => axisChips(styles, (s) => s.colorFamily, COLOR_FAMILY_LABELS), [styles]);
+  const tones = useMemo(() => axisChips(styles, (s) => s.skinTone, SKIN_TONE_LABELS), [styles]);
 
   const shown = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -89,6 +164,9 @@ export function LookBook({
           (style.description ?? '').toLowerCase().includes(text),
       );
     }
+
+    if (colour) list = list.filter((style) => style.colorFamily === colour);
+    if (tone) list = list.filter((style) => style.skinTone === tone);
 
     switch (group) {
       case 'SHORT':
@@ -119,7 +197,7 @@ export function LookBook({
     }
 
     return list;
-  }, [styles, group, query]);
+  }, [styles, group, query, colour, tone]);
 
   return (
     <Modal
@@ -158,6 +236,23 @@ export function LookBook({
             </button>
           ))}
         </div>
+
+        {colours.length > 1 || tones.length > 1 ? (
+          <div className="space-y-1.5 border-t border-stone-100 pt-2">
+            {colours.length > 1 ? (
+              <AxisRow
+                label="Colour"
+                options={colours}
+                labels={COLOR_FAMILY_LABELS}
+                value={colour}
+                onChange={setColour}
+              />
+            ) : null}
+            {tones.length > 1 ? (
+              <AxisRow label="Shown on" options={tones} labels={SKIN_TONE_LABELS} value={tone} onChange={setTone} />
+            ) : null}
+          </div>
+        ) : null}
 
         {shown.length === 0 ? (
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-xs text-ink-muted">

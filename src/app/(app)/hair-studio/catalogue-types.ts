@@ -5,6 +5,10 @@ export type HairDensity = 'LOW' | 'MEDIUM' | 'HIGH';
 export type FaceShape = 'OVAL' | 'ROUND' | 'SQUARE' | 'OBLONG' | 'HEART' | 'DIAMOND';
 export type HairMaintenance = 'LOW' | 'MEDIUM' | 'HIGH';
 export type HairGender = 'MALE' | 'FEMALE' | 'UNISEX';
+/** What the PICTURE shows, not what the hair can be recoloured to in the studio. */
+export type HairColorFamily = 'BLACK' | 'BROWN' | 'BLONDE' | 'RED' | 'GREY' | 'FASHION';
+/** Who it is shown on. Coarse on purpose — see the note in the schema. */
+export type SkinTone = 'FAIR' | 'LIGHT' | 'MEDIUM' | 'OLIVE' | 'DEEP';
 
 /**
  * A generator the studio can draw.
@@ -44,6 +48,8 @@ export interface KindsResponse {
     partings: string[];
     fadeTypes: string[];
     balayagePlacements: string[];
+    colorFamilies: HairColorFamily[];
+    skinTones: SkinTone[];
   };
 }
 
@@ -82,6 +88,10 @@ export interface Hairstyle {
    * offering controls that do nothing.
    */
   maskUrl: string | null;
+  colorFamily: HairColorFamily | null;
+  skinTone: SkinTone | null;
+  /** True when the salon uploaded the picture rather than generating it. */
+  photoIsUploaded: boolean;
   /**
    * How many saved looks in THIS salon use this style.
    *
@@ -129,6 +139,28 @@ export const MAINTENANCE_LABELS: Record<HairMaintenance, string> = {
   LOW: 'Low upkeep',
   MEDIUM: 'Medium upkeep',
   HIGH: 'High upkeep',
+};
+
+export const COLOR_FAMILY_LABELS: Record<HairColorFamily, string> = {
+  BLACK: 'Black',
+  BROWN: 'Brown',
+  BLONDE: 'Blonde',
+  RED: 'Red',
+  GREY: 'Grey',
+  FASHION: 'Fashion',
+};
+
+/**
+ * Described by complexion, never by any word about race or origin. The look-book
+ * needs to be browsable by who is in the picture; it does not need, and must not
+ * carry, a claim about who somebody is.
+ */
+export const SKIN_TONE_LABELS: Record<SkinTone, string> = {
+  FAIR: 'Fair',
+  LIGHT: 'Light',
+  MEDIUM: 'Medium',
+  OLIVE: 'Olive',
+  DEEP: 'Deep',
 };
 
 export const GENDER_LABELS: Record<HairGender, string> = {

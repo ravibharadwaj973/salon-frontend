@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Check, ImageOff, Scissors, Sparkles, Wand2 } from 'lucide-react';
+import { Check, ImageOff, Scissors, Sparkles, Upload, Wand2 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Badge, Spinner } from '@/components/ui/display';
@@ -12,13 +12,16 @@ import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
 import { MaskEditor } from './mask-editor';
 import {
+  COLOR_FAMILY_LABELS,
   DENSITY_LABELS,
   FACE_SHAPE_LABELS,
   GENDER_LABELS,
   LENGTH_LABELS,
   MAINTENANCE_LABELS,
+  SKIN_TONE_LABELS,
   TEXTURE_LABELS,
   type FaceShape,
+  type HairColorFamily,
   type HairDensity,
   type HairLength,
   type HairMaintenance,
@@ -26,6 +29,7 @@ import {
   type Hairstyle,
   type HairstyleKind,
   type KindsResponse,
+  type SkinTone,
 } from '../catalogue-types';
 
 /**
@@ -100,6 +104,13 @@ export function AssetStudio({
   }, [styles, filter]);
 
   const missing = styles.filter((style) => !style.previewUrl).length;
+
+  /** How many of the five tones the salon's own pictures actually cover. */
+  const toneCoverage = useMemo(() => {
+    const withPictures = styles.filter((style) => style.previewUrl);
+    const tones = new Set(withPictures.map((style) => style.skinTone).filter(Boolean));
+    return { shown: tones.size, total: withPictures.length };
+  }, [styles]);
   const open = styles.find((style) => style.id === openId) ?? null;
 
   return (
@@ -127,6 +138,24 @@ export function AssetStudio({
             {label}
           </button>
         ))}
+
+        {/*
+          THE GAP THE SKIN-TONE FIELD EXISTS TO SHOW.
+          
+          A salon whose entire library is shot on one complexion has told every
+          other customer something it did not mean to, and the fix is not a
+          disclaimer — it is being able to see the gap. This is the only screen
+          that can show it, so it does.
+        */}
+        {toneCoverage.shown > 1 ? (
+          <span className="text-2xs text-ink-subtle">
+            Shown on {toneCoverage.shown} of 5 skin tones
+          </span>
+        ) : toneCoverage.total > 2 ? (
+          <span className="text-2xs text-amber-700">
+            Every picture is on one skin tone — worth adding a few others
+          </span>
+        ) : null}
 
         {status ? (
           <span className="ml-auto text-2xs text-ink-subtle">
@@ -235,6 +264,10 @@ function StyleDrawer({
   const [drawing, setDrawing] = useState(false);
   const [polls, setPolls] = useState(0);
   const [maskOpen, setMaskOpen] = useState(false);
+  const [colorFamily, setColorFamily] = useState<HairColorFamily | ''>(style.colorFamily ?? '');
+  const [skinTone, setSkinTone] = useState<SkinTone | ''>(style.skinTone ?? '');
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // What to draw. Defaults chosen by the server when these are left alone.
   const [texture, setTexture] = useState<HairTexture | ''>('');
@@ -296,6 +329,8 @@ function StyleDrawer({
         description: description.trim() || null,
         maintenance,
         isActive,
+        colorFamily: colorFamily || null,
+        skinTone: skinTone || null,
         supportedTextures,
         supportedLengths,
         supportedDensities,
@@ -328,6 +363,50 @@ function StyleDrawer({
       toast.error(errorMessage(error));
     } finally {
       setDrawing(false);
+    }
+  }
+
+  /**
+   * UPLOAD A PHOTOGRAPH THE SALON TOOK ITSELF.
+   *
+   * On reflection this is the MAIN path and the generated reference is the
+   * fallback. A salon's own work is better than anything an image model draws —
+   * it is this salon's cutting, on this salon's customers, under this salon's
+   * lights — and everything downstream is identical, because the shader does not
+   * know where the pixels came from. It also means a salon with no image-model
+   * key at all gets the whole studio.
+   */
+  async function upload(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(`That photo is about ${Math.round(file.size / 1024 / 1024)}MB. The limit is 10MB.`);
+      return;
+    }
+    const dataUrl = await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+    if (!dataUrl) {
+      toast.error('That photo could not be read.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      /*
+       * Consent is asked for here, in the same breath as the upload, because this
+       * is the only moment anybody can honestly answer it. A generated portrait
+       * is of nobody; this is very likely a real customer, going into a look-book
+       * other customers scroll through. The API refuses without it independently.
+       */
+      await apiPost(`hair-studio/hairstyles/${style.id}/photo`, { photo: dataUrl, consent: true });
+      toast.success('Photo uploaded — cut the hair out of it next');
+      onChanged();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -394,6 +473,45 @@ function StyleDrawer({
               </Select>
             )}
           </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/*
+              WHAT THE PICTURE SHOWS, which is a different question from what the
+              cut is — and the two axes a customer actually browses by.
+              
+              `colorFamily` is NOT what the hair can be recoloured to: that is
+              every colour, for free, in the studio. It is what this photograph
+              happens to show, which is what somebody scrolling is looking at.
+            */}
+            <Field label="Colour in the photo" hint="How the look-book groups it">
+              {({ id }) => (
+                <Select
+                  id={id}
+                  value={colorFamily}
+                  onChange={(event) => setColorFamily(event.target.value as HairColorFamily | '')}
+                >
+                  <option value="">Not set</option>
+                  {(Object.keys(COLOR_FAMILY_LABELS) as HairColorFamily[]).map((value) => (
+                    <option key={value} value={value}>
+                      {COLOR_FAMILY_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Skin tone shown" hint="So you can see which are missing">
+              {({ id }) => (
+                <Select id={id} value={skinTone} onChange={(event) => setSkinTone(event.target.value as SkinTone | '')}>
+                  <option value="">Not set</option>
+                  {(Object.keys(SKIN_TONE_LABELS) as SkinTone[]).map((value) => (
+                    <option key={value} value={value}>
+                      {SKIN_TONE_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </div>
 
           <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-muted">
             <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
@@ -535,6 +653,41 @@ function StyleDrawer({
             no cut-out is a style the studio can show but not recolour, which is
             half a feature.
           */}
+          {/*
+            THE PHOTOGRAPH, FROM WHICHEVER SOURCE — and uploading comes first.
+            
+            A salon's own work beats anything generated, and this path needs no
+            image model, no key and no budget. The generated reference below is
+            the fallback for a style nobody has photographed yet.
+          */}
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = '';
+              }}
+            />
+            <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()} loading={uploading}>
+              <Upload className="h-3.5 w-3.5" />
+              {style.previewUrl ? 'Replace the photo' : 'Upload a photo'}
+            </Button>
+            {style.previewUrl && style.photoIsUploaded ? (
+              <Badge tone="neutral">Your own photo</Badge>
+            ) : style.previewUrl ? (
+              <Badge tone="info">Generated</Badge>
+            ) : null}
+          </div>
+
+          <p className="text-2xs leading-relaxed text-ink-subtle">
+            Uploading one of your own cuts costs nothing and usually looks better than anything generated. Whoever is in
+            the photograph needs to be happy for the salon to show it.
+          </p>
+
           {style.previewUrl ? (
             <button
               type="button"
