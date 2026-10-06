@@ -215,3 +215,79 @@ describe('the shader and the reference stay in step', () => {
     expect(FRAGMENT_SHADER).toContain('mix(photo, result, m)');
   });
 });
+
+describe('density, shine and how vivid — on any style', () => {
+  const caramel = hexToLab('#A9743F');
+
+  /**
+   * NONE OF THESE KNOWS WHICH HAIRCUT IT IS LOOKING AT, and that is the point:
+   * they are properties of hair, not of a cut, so a salon adding its thirty-
+   * fourth style gets all three for nothing.
+   */
+
+  /**
+   * What makes hair look thin is seeing THROUGH it, so the control works on the
+   * shadows between the locks. The lit strands must be left alone — pulling those
+   * down too would just be a brightness slider wearing a different label.
+   */
+  it('deepens the gaps for thicker hair and leaves the lit strands alone', () => {
+    const gapThin = recolourPixel([25, 5, 8], 0.05, 0.5, 45, { base: caramel, lift: 0.8, density: -1 });
+    const gapThick = recolourPixel([25, 5, 8], 0.05, 0.5, 45, { base: caramel, lift: 0.8, density: 1 });
+    expect(gapThin[0] - gapThick[0]).toBeGreaterThan(10);
+
+    const litThin = recolourPixel([48, 5, 8], 0.95, 0.5, 45, { base: caramel, lift: 0.8, density: -1 });
+    const litThick = recolourPixel([48, 5, 8], 0.95, 0.5, 45, { base: caramel, lift: 0.8, density: 1 });
+    expect(Math.abs(litThin[0] - litThick[0])).toBeLessThan(0.5);
+  });
+
+  /**
+   * Gloss is a NARROW band at the top of the range. Widening it is what makes
+   * "shiny" look wet rather than healthy, which is a different hairstyle and not
+   * one anybody asks for — so the shadows must not move when shine does.
+   */
+  it('puts gloss only on the brightest strands', () => {
+    const shadowMatte = recolourPixel([20, 5, 8], 0.2, 0.5, 45, { base: caramel, lift: 0.8, shine: -1 });
+    const shadowGloss = recolourPixel([20, 5, 8], 0.2, 0.5, 45, { base: caramel, lift: 0.8, shine: 1 });
+    expect(Math.abs(shadowMatte[0] - shadowGloss[0])).toBeLessThan(0.5);
+
+    const litMatte = recolourPixel([48, 5, 8], 0.98, 0.5, 45, { base: caramel, lift: 0.8, shine: -1 });
+    const litGloss = recolourPixel([48, 5, 8], 0.98, 0.5, 45, { base: caramel, lift: 0.8, shine: 1 });
+    expect(litGloss[0] - litMatte[0]).toBeGreaterThan(15);
+  });
+
+  /**
+   * "How vivid" is the ash-to-warm axis, which is a scale around the neutral
+   * axis of Lab — exactly what ashy means. It must not change the LEVEL: a
+   * customer asking for less orange is not asking for darker hair.
+   */
+  it('changes how vivid the colour is without changing how light it is', () => {
+    const ashy = recolourPixel([35, 5, 8], 0.5, 0.5, 45, { base: caramel, lift: 0.8, intensity: 0.2 });
+    const vivid = recolourPixel([35, 5, 8], 0.5, 0.5, 45, { base: caramel, lift: 0.8, intensity: 2 });
+    expect(Math.abs(vivid[1]) + Math.abs(vivid[2])).toBeGreaterThan(Math.abs(ashy[1]) + Math.abs(ashy[2]) + 20);
+    expect(Math.abs(vivid[0] - ashy[0])).toBeLessThan(0.001);
+  });
+
+  /** 50 on the panel is "as photographed", so an untouched slider changes nothing. */
+  it('leaves the picture exactly as it was at the neutral setting', () => {
+    const plain = recolourPixel([35, 5, 8], 0.5, 0.5, 45, { base: caramel, lift: 0.8 });
+    const neutral = recolourPixel([35, 5, 8], 0.5, 0.5, 45, {
+      base: caramel,
+      lift: 0.8,
+      density: 0,
+      shine: 0,
+      intensity: 1,
+    });
+    expect(neutral).toEqual(plain);
+  });
+
+  it('is carried in the shader as well, under the same names', () => {
+    for (const uniform of ['uDensity', 'uShine', 'uIntensity', 'uTexel']) {
+      expect(FRAGMENT_SHADER).toContain(uniform);
+    }
+    // The same constants on both sides. A number changed in one copy only is the
+    // whole reason this file exists.
+    for (const constant of ['14.0', '20.0', '1.6', '1.5']) {
+      expect(FRAGMENT_SHADER).toContain(constant);
+    }
+  });
+});

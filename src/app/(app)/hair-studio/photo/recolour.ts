@@ -146,6 +146,12 @@ export function measureHair(
 export interface RecolourInput {
   base: Lab;
   lift: number;
+  /** -1 fine, 0 as photographed, 1 thick. See the note in recolourPixel. */
+  density?: number;
+  /** -1 matte, 0 as photographed, 1 glossy. */
+  shine?: number;
+  /** 0 ashy, 1 as chosen, 2 vivid. */
+  intensity?: number;
   highlight?: Lab;
   highlightAmount?: number;
   /** 1 = face-framing only, 0 = all over. */
@@ -203,6 +209,45 @@ export function recolourPixel(lab: Lab, norm: number, rel: number, span: number,
     outL += (input.root[0] - outL) * k * 0.9;
     outA += (input.root[1] - outA) * k;
     outB += (input.root[2] - outB) * k;
+  }
+
+  /**
+   * THE THREE THAT APPLY TO ANY HAIRSTYLE.
+   *
+   * None of them knows which haircut it is looking at, because none of them is a
+   * property of a cut — they are properties of hair. That is the whole reason
+   * they belong in the shader and not in the catalogue: a salon adding its
+   * thirty-fourth style gets them for nothing.
+   *
+   * DENSITY is honest about what it is. A photograph holds no information for a
+   * strand that was never shot, so nothing here adds hair. What makes hair look
+   * thin is seeing THROUGH it, so the control deepens the shadows between the
+   * locks — which reads as thickness far more strongly than anything done to the
+   * strands — and the renderer grows the silhouette to match.
+   *
+   * SHINE is a narrow band at the top of the range. Narrow on purpose: widening
+   * it makes hair look wet rather than healthy, which is a different hairstyle.
+   *
+   * INTENSITY is the ash-to-warm axis, and it is one multiply around the neutral
+   * axis of Lab — which is exactly what "ashy" means and why doing this in RGB
+   * would have needed a lookup table.
+   */
+  const density = input.density ?? 0;
+  if (density !== 0) {
+    const gap = Math.min(1, Math.max(0, 1 - norm / 0.5)) ** 1.5;
+    outL -= gap * density * 14;
+  }
+
+  const shine = input.shine ?? 0;
+  if (shine !== 0) {
+    const band = Math.min(1, Math.max(0, (norm - 0.6) / 0.4)) ** 1.6;
+    outL += band * shine * 20;
+  }
+
+  const intensity = input.intensity ?? 1;
+  if (intensity !== 1) {
+    outA *= intensity;
+    outB *= intensity;
   }
 
   return [outL, outA, outB];

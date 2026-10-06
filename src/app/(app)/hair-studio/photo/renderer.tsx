@@ -25,6 +25,14 @@ export interface PhotoDesign {
   baseColor: string;
   /** 0-100. How far the hair is taken to the target's level. */
   lift: number;
+  /**
+   * The three that apply to any hairstyle, all 0-100 with 50 meaning "as
+   * photographed". They are properties of hair rather than of a cut, which is
+   * why they live here rather than on the catalogue entry.
+   */
+  density: number;
+  shine: number;
+  intensity: number;
   highlightColor: string;
   highlightAmount: number;
   /** Face-framing only, as against woven through the whole head. */
@@ -198,6 +206,13 @@ export function PhotoRenderer({
 
     gl.uniform3fv(u('uBase'), lab(design.baseColor));
     gl.uniform1f(u('uLift'), design.lift / 100);
+
+    // 50 is "as photographed" on every one of these, so the sliders land in the
+    // middle and a stylist can see which way is more and which is less.
+    gl.uniform1f(u('uDensity'), (design.density - 50) / 50);
+    gl.uniform1f(u('uShine'), (design.shine - 50) / 50);
+    gl.uniform1f(u('uIntensity'), design.intensity / 50);
+    gl.uniform2f(u('uTexel'), 1 / Math.max(1, gl.drawingBufferWidth), 1 / Math.max(1, gl.drawingBufferHeight));
 
     gl.uniform3fv(u('uHighlight'), lab(design.highlightColor));
     gl.uniform1f(u('uHighlightAmount'), design.highlightAmount / 100);

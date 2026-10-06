@@ -85,6 +85,42 @@ export function PhotoControls({
           value={design.lift}
           onChange={(lift) => set({ lift })}
         />
+        {/*
+          HOW VIVID, not how dark. This is the ash-to-warm axis a colourist
+          actually reaches for — the difference between an ashy beige and a warm
+          caramel at the same level — and it is the control customers are really
+          asking about when they say "not too orange".
+        */}
+        <Slider
+          label="How vivid"
+          hint="Ashy at the low end, warm and saturated at the high"
+          value={design.intensity}
+          onChange={(intensity) => set({ intensity })}
+        />
+      </Section>
+
+      {/*
+        THE HAIR ITSELF, not the colour — and it works on every style, because
+        neither of these is a property of a haircut.
+      */}
+      <Section title="The hair" defaultOpen={false}>
+        <Slider
+          label="Density"
+          hint="How full it reads. 50 is exactly as photographed."
+          value={design.density}
+          onChange={(density) => set({ density })}
+        />
+        <Slider
+          label="Shine"
+          hint="Matte through to glossy. 50 is as photographed."
+          value={design.shine}
+          onChange={(shine) => set({ shine })}
+        />
+        <p className="text-2xs leading-relaxed text-ink-subtle">
+          Density changes how full the hair looks — the depth of the shadows between the locks, and the width of the
+          outline. It cannot add hair that was never photographed, so it is a guide to the finish rather than a promise
+          about how much hair somebody has.
+        </p>
       </Section>
 
       <Section title="Highlights" defaultOpen={false}>

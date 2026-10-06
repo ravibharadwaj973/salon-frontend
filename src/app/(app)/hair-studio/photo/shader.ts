@@ -115,6 +115,23 @@ uniform float uBottom;
 uniform vec3  uBase;        // target pigment, in Lab
 uniform float uLift;        // 0 keep the original level, 1 go fully to the target
 
+/**
+ * THE THREE THAT WORK ON ANY STYLE.
+ *
+ * Nothing below knows or cares which haircut it is looking at — they are
+ * properties of hair rather than of a cut, which is why they live on the shader
+ * and not in the catalogue.
+ *
+ *   uDensity  how FULL the hair reads. -1 fine, 0 as photographed, 1 thick.
+ *   uShine    gloss. -1 matte, 0 as photographed, 1 glossy.
+ *   uIntensity how vivid the pigment is. 0 ashy, 1 as chosen, 2 vivid.
+ */
+uniform float uDensity;
+uniform float uShine;
+uniform float uIntensity;
+/** One texel, so the mask can be grown or shrunk for the silhouette. */
+uniform vec2  uTexel;
+
 uniform vec3  uHighlight;   // Lab
 uniform float uHighlightAmount;
 uniform float uHighlightFace;   // 1 = face-framing only, 0 = all over
@@ -136,6 +153,29 @@ ${LAB_GLSL}
 void main() {
   vec3 photo = texture2D(uPhoto, vUv).rgb;
   float m = texture2D(uMask, vUv).r;
+
+  /*
+   * DENSITY, PART ONE: THE SILHOUETTE.
+   *
+   * Thicker hair is physically wider, and the outline is most of what reads as
+   * volume from across a room. Four taps and a max grows the mask; a min shrinks
+   * it. Cheap, and it moves the edge without smearing the hair inside it.
+   *
+   * It is worth being plain about what this is: a photograph has no information
+   * for a strand that was never shot, so nothing here ADDS hair. It changes how
+   * full the hair reads, which is what the control is for.
+   */
+  if (abs(uDensity) > 0.02) {
+    vec2 o = uTexel * 2.0;
+    float a = texture2D(uMask, vUv + vec2( o.x, 0.0)).r;
+    float b = texture2D(uMask, vUv + vec2(-o.x, 0.0)).r;
+    float c = texture2D(uMask, vUv + vec2(0.0,  o.y)).r;
+    float d = texture2D(uMask, vUv + vec2(0.0, -o.y)).r;
+    float grown = uDensity > 0.0
+      ? max(max(a, b), max(c, d))
+      : min(min(a, b), min(c, d));
+    m = clamp(mix(m, grown, min(1.0, abs(uDensity) * 1.6)), 0.0, 1.0);
+  }
 
   if (m <= 0.002) {
     gl_FragColor = vec4(photo, 1.0);
@@ -233,6 +273,33 @@ void main() {
       outB = mix(outB, uStripColor[i].z, k);
     }
   }
+
+  /*
+   * DENSITY, PART TWO: THE GAPS — and this is the half that does the work.
+   *
+   * What makes hair look thin is seeing THROUGH it. Deepening the shadows
+   * between the locks reads as thickness far more strongly than anything done to
+   * the strands, and lifting them reads as fine hair. Applied to the shadow end
+   * of the range only, so the lit strands are untouched.
+   */
+  float gap = pow(clamp(1.0 - norm / 0.5, 0.0, 1.0), 1.5);
+  outL -= gap * uDensity * 14.0;
+
+  /*
+   * GLOSS, on a narrow band at the top of the range.
+   *
+   * Narrow on purpose. Widening the band is what makes "shiny" look WET rather
+   * than healthy, which is a different hairstyle and not one anybody asks for.
+   */
+  float band = pow(clamp((norm - 0.6) / 0.4, 0.0, 1.0), 1.6);
+  outL += band * uShine * 20.0;
+
+  /*
+   * HOW VIVID, as a scale around the neutral axis. This is the ash-to-warm
+   * control a colourist actually reaches for, and it is one multiply.
+   */
+  outA *= uIntensity;
+  outB *= uIntensity;
 
   vec3 result = labToRgb(vec3(outL, outA, outB));
   gl_FragColor = vec4(mix(photo, result, m), 1.0);

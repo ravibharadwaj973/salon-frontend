@@ -84,6 +84,14 @@ const DEFAULT_DESIGN: PhotoDesign = {
    * that appears to be broken for the first few clicks is one people stop using.
    */
   lift: 50,
+  /*
+   * Fifty across the board, because fifty means "exactly as the photograph was
+   * taken". A control whose neutral position is at one end teaches people it only
+   * does one thing; from the middle it is obvious that it goes both ways.
+   */
+  density: 50,
+  shine: 50,
+  intensity: 50,
   highlightColor: '#C68642',
   highlightAmount: 0,
   highlightFace: false,
@@ -104,6 +112,9 @@ function toConfig(design: PhotoDesign) {
     strips: design.strips,
     photo: {
       lift: design.lift,
+      density: design.density,
+      shine: design.shine,
+      intensity: design.intensity,
       highlightColor: design.highlightColor,
       highlightAmount: design.highlightAmount,
       highlightFace: design.highlightFace,
