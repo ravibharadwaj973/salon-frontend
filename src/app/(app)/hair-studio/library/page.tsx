@@ -5,6 +5,7 @@ import { apiFetchSafe } from '@/lib/api';
 import { Card, EmptyState, PageHeader } from '@/components/ui/display';
 import type { Hairstyle, KindsResponse } from '../catalogue-types';
 import { AssetStudio } from './asset-studio';
+import { NewStyleButton } from './new-style';
 import { InstallStarter } from '../install-starter';
 
 export const metadata: Metadata = { title: 'Hair asset studio' };
@@ -42,12 +43,21 @@ export default async function HairLibraryPage() {
         title="Hair asset studio"
         description="The styles your salon offers, and the picture each one shows"
         action={
-          <Link
-            href="/hair-studio"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
-          >
-            Open the studio
-          </Link>
+          <>
+            <Link
+              href="/hair-studio"
+              className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+            >
+              Open the studio
+            </Link>
+            {/*
+              In the header rather than buried in the empty state. A salon's menu
+              is never finished: the one in ten styles it actually sells that the
+              standard list does not cover is exactly the one it wants to add, and
+              there was no way to do it at all.
+            */}
+            <NewStyleButton kinds={kinds?.kinds ?? []} />
+          </>
         }
       />
 
@@ -56,8 +66,13 @@ export default async function HairLibraryPage() {
           <EmptyState
             icon={Scissors}
             title="No styles on the menu yet"
-            description="Add the standard menu and every style appears here — rename, reprice or remove whatever does not suit your salon, then give each one a picture."
-            action={<InstallStarter />}
+            description="Add the standard menu to start from the usual thirty-odd, or add your own one at a time. Either way, rename, reprice or remove whatever does not suit your salon, then give each one a picture."
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <InstallStarter />
+                <NewStyleButton kinds={kinds?.kinds ?? []} />
+              </div>
+            }
           />
         </Card>
       ) : (

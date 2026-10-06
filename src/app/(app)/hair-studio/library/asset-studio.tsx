@@ -221,6 +221,14 @@ function StyleDrawer({
   const [description, setDescription] = useState(style.description ?? '');
   const [maintenance, setMaintenance] = useState<HairMaintenance>(style.maintenance);
   const [isActive, setIsActive] = useState(style.isActive);
+  const [supportedTextures, setSupportedTextures] = useState<HairTexture[]>(style.supportedTextures);
+  const [supportedLengths, setSupportedLengths] = useState<HairLength[]>(style.supportedLengths);
+  const [supportedDensities, setSupportedDensities] = useState<HairDensity[]>(style.supportedDensities);
+  const [recommendedFaceShapes, setRecommendedFaceShapes] = useState<FaceShape[]>(style.recommendedFaceShapes);
+  const [supportsBangs, setSupportsBangs] = useState(style.supportsBangs);
+  const [supportsLayers, setSupportsLayers] = useState(style.supportsLayers);
+  const [supportsParting, setSupportsParting] = useState(style.supportsParting);
+  const [supportsFade, setSupportsFade] = useState(style.supportsFade);
   const [saving, setSaving] = useState(false);
 
   const [references, setReferences] = useState<Reference[]>([]);
@@ -288,6 +296,14 @@ function StyleDrawer({
         description: description.trim() || null,
         maintenance,
         isActive,
+        supportedTextures,
+        supportedLengths,
+        supportedDensities,
+        recommendedFaceShapes,
+        supportsBangs,
+        supportsLayers,
+        supportsParting,
+        supportsFade,
       });
       toast.success('Saved');
       onChanged();
@@ -402,30 +418,88 @@ function StyleDrawer({
             style has no fade slider disappeared for a reason nothing on screen
             could account for.
           */}
-          <div className="rounded-lg bg-stone-50 p-3">
-              <p className="text-2xs font-medium text-ink-muted">What this style can be cut as</p>
-              <dl className="mt-2 space-y-1 text-2xs text-ink-subtle">
-                <Row label="Textures" value={style.supportedTextures.map((t) => TEXTURE_LABELS[t]).join(', ')} />
-                <Row label="Lengths" value={style.supportedLengths.map((l) => LENGTH_LABELS[l]).join(', ')} />
-                <Row label="Densities" value={style.supportedDensities.map((d) => DENSITY_LABELS[d]).join(', ')} />
-                <Row
-                  label="Suits"
-                  value={style.recommendedFaceShapes.map((f) => FACE_SHAPE_LABELS[f]).join(', ')}
-                />
-                <Row
-                  label="Takes"
-                  value={
-                    [
-                      style.supportsBangs && 'bangs',
-                      style.supportsLayers && 'layers',
-                      style.supportsParting && 'a parting',
-                      style.supportsFade && 'a fade',
-                    ]
-                      .filter(Boolean)
-                      .join(', ') || 'nothing extra'
-                  }
-                />
-              </dl>
+          <div className="space-y-2.5 rounded-lg bg-stone-50 p-3">
+            <div>
+              <p className="text-2xs font-medium text-ink-muted">What this salon offers it as</p>
+              {/*
+                EDITABLE, AND ONLY DOWNWARDS.
+                
+                The chips offered are the GENERATOR'S range; a salon narrows
+                within it — "we only do this bob at medium" — and the API refuses
+                anything wider, because the thing on the other end cannot do what
+                the generator cannot do. Showing the full range greyed would be
+                more honest still, but a salon never needs the options it cannot
+                have, and the API's refusal is the real guard either way.
+                
+                Nothing ticked means ALL of them, which is the reading every
+                other part of this codebase takes: a salon that has not thought
+                about it has not thereby refused everything.
+              */}
+            </div>
+
+            <Pills
+              label="Textures"
+              all={kind?.textures ?? TEXTURES}
+              labels={TEXTURE_LABELS}
+              value={supportedTextures}
+              onChange={setSupportedTextures}
+            />
+            <Pills
+              label="Lengths"
+              all={kind?.lengths ?? LENGTHS}
+              labels={LENGTH_LABELS}
+              value={supportedLengths}
+              onChange={setSupportedLengths}
+            />
+            <Pills
+              label="Densities"
+              all={kind?.densities ?? DENSITIES}
+              labels={DENSITY_LABELS}
+              value={supportedDensities}
+              onChange={setSupportedDensities}
+            />
+            <Pills
+              label="Suits"
+              all={kind?.faceShapes ?? FACES}
+              labels={FACE_SHAPE_LABELS}
+              value={recommendedFaceShapes}
+              onChange={setRecommendedFaceShapes}
+            />
+
+            <p className="text-2xs text-ink-subtle">
+              Nothing ticked means all of them. You can narrow what the generator allows, never widen it.
+            </p>
+
+            <div className="border-t border-stone-200 pt-2">
+              <p className="mb-1 text-2xs font-medium text-ink-muted">Takes</p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ['bangs', supportsBangs, setSupportsBangs, kind ? kind.supportsBangs : true],
+                    ['layers', supportsLayers, setSupportsLayers, kind ? kind.supportsLayers : true],
+                    ['a parting', supportsParting, setSupportsParting, kind ? kind.supportsParting : true],
+                    ['a fade', supportsFade, setSupportsFade, kind ? kind.supportsFade : true],
+                  ] as const
+                ).map(([label, on, toggle, allowed]) => (
+                  <label
+                    key={label}
+                    className={cn(
+                      'flex items-center gap-1.5 text-2xs',
+                      allowed ? 'cursor-pointer text-ink-muted' : 'cursor-not-allowed text-ink-subtle/60',
+                    )}
+                    title={allowed ? undefined : 'This kind of cut cannot take it'}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on && allowed}
+                      disabled={!allowed}
+                      onChange={(event) => toggle(event.target.checked)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -536,7 +610,20 @@ function StyleDrawer({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={reference.imageUrl} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            <span className="flex h-full items-center justify-center px-1 text-center text-2xs text-ink-subtle">
+                            /*
+                              THE REASON, NOT JUST THE WORD.
+                              
+                              This said "failed" and nothing else, and the first
+                              person to hit it had two failures and no idea why —
+                              a wrong model slug, a key the server does not have
+                              and a provider having a bad minute all looked
+                              identical. The row has carried the provider's own
+                              message all along; it simply was not shown.
+                            */
+                            <span
+                              title={reference.error ?? undefined}
+                              className="flex h-full items-center justify-center px-1 text-center text-2xs text-ink-subtle"
+                            >
                               {reference.status === 'REFUSED'
                                 ? 'refused'
                                 : reference.status === 'FAILED'
@@ -565,6 +652,27 @@ function StyleDrawer({
                 </div>
               ) : null}
 
+              {/*
+                Said in full under the strip, because a tooltip on a 64-pixel
+                square is not where anybody looks for a reason — and the reason is
+                usually a setting the owner can change.
+              */}
+              {references[0] && (references[0].status === 'FAILED' || references[0].status === 'REFUSED') ? (
+                <div className="rounded-lg bg-rose-50 p-2.5 text-2xs leading-relaxed text-rose-800">
+                  <p className="font-medium">
+                    {references[0].status === 'REFUSED'
+                      ? 'The image provider would not draw this one.'
+                      : 'That picture could not be drawn.'}
+                  </p>
+                  {references[0].error ? <p className="mt-1">{references[0].error}</p> : null}
+                  <p className="mt-1 text-rose-700">
+                    {references[0].status === 'REFUSED'
+                      ? 'That is its own safety filter rather than anything you did — a different colour or a less extreme description usually goes through.'
+                      : 'If every attempt fails the same way it is a setting rather than a bad minute: check BFL_API_KEY and BFL_MODEL on the server. The studio itself is unaffected.'}
+                  </p>
+                </div>
+              ) : null}
+
               {references[0]?.prompt ? (
                 <details className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
                   <summary className="cursor-pointer text-2xs font-medium text-ink-muted">What we asked for</summary>
@@ -574,8 +682,9 @@ function StyleDrawer({
 
               <p className="text-2xs leading-relaxed text-ink-subtle">
                 <Badge tone="neutral">Drawn once</Badge>{' '}
-                Reference pictures are generated here and kept. Nothing is drawn when a customer opens the look-book or
-                moves a slider in the studio — the 3D preview is free, and this is not.
+                This is the only thing here that costs a generation. Once the picture exists and the hair is cut out of
+                it, every colour, highlight and painted section in the studio is a shader — instant, and free however
+                many a customer tries.
               </p>
             </>
           )}
@@ -612,13 +721,56 @@ function subtitle(style: Hairstyle): string {
   return category.toLowerCase().includes(gender.toLowerCase()) ? category : `${category} · ${gender}`;
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/**
+ * A row of toggles for one of the supported-* arrays.
+ *
+ * Chips rather than a multi-select, because the whole list is four to six items
+ * and a salon reads them as a sentence — "we do this straight or wavy" — not as
+ * a form control to open.
+ */
+function Pills<T extends string>({
+  label,
+  all,
+  labels,
+  value,
+  onChange,
+}: {
+  label: string;
+  all: readonly T[];
+  labels: Record<T, string>;
+  value: T[];
+  onChange: (next: T[]) => void;
+}) {
   return (
-    <div className="flex gap-2">
-      <dt className="w-20 shrink-0">{label}</dt>
-      {/* An empty supported-array means "all of them" — a salon that never
-          answered has not thereby forbidden everything. */}
-      <dd className="text-ink-muted">{value || 'any'}</dd>
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span className="w-16 shrink-0 text-2xs text-ink-subtle">{label}</span>
+      {all.map((option) => {
+        const on = value.length === 0 || value.includes(option);
+        return (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={on}
+            onClick={() =>
+              onChange(
+                // An empty list means "all", so the first click has to start
+                // from the full set and remove one — otherwise unticking the
+                // first option would read as selecting nothing and mean the
+                // opposite of what was clicked.
+                on
+                  ? (value.length === 0 ? [...all] : value).filter((item) => item !== option)
+                  : [...value, option],
+              )
+            }
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-2xs transition-colors',
+              on ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-stone-200 text-ink-subtle hover:text-ink',
+            )}
+          >
+            {labels[option]}
+          </button>
+        );
+      })}
     </div>
   );
 }
