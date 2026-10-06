@@ -10,7 +10,7 @@ import { Field, Input, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
 import { money } from '@/lib/format';
-import type { FaceShape, HairDensity, HairLength, HairTexture, Hairstyle } from '../hairstyles/types';
+import type { FaceShape, HairDensity, HairLength, HairTexture, Hairstyle } from './catalogue-types';
 import { Controls, type StudioState } from './controls';
 // From views.ts, NOT from ./viewport: importing it from there drags three.js
 // into the server bundle and defeats the ssr:false below.

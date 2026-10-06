@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import type { FaceShape } from '../hairstyles/types';
+import type { FaceShape } from './catalogue-types';
 import { hairlinePolar, headRadius, noseBulge } from './hair/head-shape';
 import { hexToLinear } from './hair/colour';
 import { strandLength, type GenerateOptions } from './hair/generate';

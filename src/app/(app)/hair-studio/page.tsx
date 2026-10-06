@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { apiFetchSafe } from '@/lib/api';
 import { Card, EmptyState, PageHeader } from '@/components/ui/display';
 import { fullName } from '@/lib/format';
 import type { CustomerProfile } from '@/lib/types';
-import type { Hairstyle } from '../hairstyles/types';
+import type { Hairstyle } from './catalogue-types';
 import { Studio, type InitialDesign } from './studio';
+import { InstallStarter } from './install-starter';
 
 export const metadata: Metadata = { title: 'Hair studio' };
 export const dynamic = 'force-dynamic';
@@ -54,15 +54,14 @@ export default async function HairStudioPage({
           <EmptyState
             icon={Sparkles}
             title="The studio has nothing to draw yet"
-            description="It works from the cuts your salon offers. Add them under Hairstyles — the standard menu is one tap — and they appear here."
-            action={
-              <Link
-                href="/hairstyles"
-                className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
-              >
-                Set up hairstyles
-              </Link>
-            }
+            description="It works from the cuts your salon offers. Add the standard menu and they appear here — rename, reprice or remove whatever does not suit your salon."
+            /*
+             * The button rather than a link to the old Hairstyles screen.
+             * Removing that screen must not strand the studio: a salon that
+             * opens this and finds no way forward does not come back, and the
+             * admin asset studio that replaces it does not exist yet.
+             */
+            action={<InstallStarter />}
           />
         </Card>
       ) : (

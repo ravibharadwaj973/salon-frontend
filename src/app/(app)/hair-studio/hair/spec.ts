@@ -1,4 +1,4 @@
-import type { HairDensity, HairLength, HairTexture } from '../../hairstyles/types';
+import type { HairDensity, HairLength, HairTexture } from '../catalogue-types';
 
 export type Bangs = 'NONE' | 'CURTAIN' | 'STRAIGHT' | 'SIDE' | 'WISPY' | 'MICRO';
 export type Layers = 'NONE' | 'LIGHT' | 'MEDIUM' | 'HEAVY';

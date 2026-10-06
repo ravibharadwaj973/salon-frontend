@@ -1,4 +1,4 @@
-import type { FaceShape } from '../../hairstyles/types';
+import type { FaceShape } from '../catalogue-types';
 
 /**
  * THE SKULL, AS ONE FUNCTION.

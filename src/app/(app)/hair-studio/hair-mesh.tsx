@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import type { FaceShape } from '../hairstyles/types';
+import type { FaceShape } from './catalogue-types';
 import { generateHair, type GenerateOptions } from './hair/generate';
 import type { DesignSpec } from './hair/spec';
 

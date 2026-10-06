@@ -13,7 +13,7 @@ import {
   type HairLength,
   type HairTexture,
   type Hairstyle,
-} from '../hairstyles/types';
+} from './catalogue-types';
 import type { Bangs, DesignConfig, FadeType, Intensity, Layers, Parting, Tint } from './hair/spec';
 
 /**

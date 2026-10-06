@@ -1,4 +1,4 @@
-import type { FaceShape } from '../../hairstyles/types';
+import type { FaceShape } from '../catalogue-types';
 import { makePainter, type StrandIdentity } from './colour';
 import { headRadius, hairlinePolar } from './head-shape';
 import { profileFor } from './profiles';

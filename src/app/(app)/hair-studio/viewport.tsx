@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import * as THREE from 'three';
-import type { FaceShape } from '../hairstyles/types';
+import type { FaceShape } from './catalogue-types';
 import { HairMesh } from './hair-mesh';
 import { Lights, Mannequin, Salon } from './scene';
 import type { GenerateOptions } from './hair/generate';
