@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -100,19 +100,18 @@ export function Viewport({
   viewNonce: number;
   onUserTookCamera: () => void;
 }) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    return (
-      <div className="flex h-full items-center justify-center p-8 text-center">
-        <p className="max-w-sm text-sm text-ink-muted">
-          This browser could not start 3D. The studio needs WebGL, which is usually turned off by a hardware-acceleration
-          setting rather than missing — everything else in Parlon works without it.
-        </p>
-      </div>
-    );
-  }
-
+  /*
+   * NO onError HERE, AND THAT IS THE FIX RATHER THAN AN OMISSION.
+   *
+   * This component used to hold a `failed` state, an onError prop on the Canvas
+   * below, and a friendly paragraph behind it. The paragraph was unreachable:
+   * three throws from inside its own constructor during render, and a prop cannot
+   * catch a render-time throw. With WebGL disabled the real page showed the app's
+   * global error boundary and lost the entire studio, panel included.
+   *
+   * The same message now lives in a CanvasBoundary wrapped around this component
+   * in studio.tsx, where componentDidCatch can actually see the throw.
+   */
   return (
     <Canvas
       shadows
@@ -125,7 +124,6 @@ export function Viewport({
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 0.92;
       }}
-      onError={() => setFailed(true)}
     >
       <color attach="background" args={['#efe9e2']} />
       <fog attach="fog" args={['#efe9e2', 9, 20]} />

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, RotateCcw, Save } from 'lucide-react';
+import { Camera, CalendarPlus, RotateCcw, Save, Wand2 } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/form';
@@ -12,6 +12,9 @@ import { cn } from '@/lib/cn';
 import { money } from '@/lib/format';
 import type { FaceShape, HairDensity, HairLength, HairTexture, Hairstyle } from './catalogue-types';
 import { Controls, type StudioState } from './controls';
+import { PhotoPreview } from './photo-preview';
+import { Advisor } from './advisor';
+import { CanvasBoundary } from './canvas-boundary';
 // From views.ts, NOT from ./viewport: importing it from there drags three.js
 // into the server bundle and defeats the ssr:false below.
 import { VIEWS, VIEW_LABELS, type ViewName } from './views';
@@ -58,6 +61,34 @@ const pick = <T extends string>(allowed: T[], all: T[], current: T, fallback: T)
   const list = allowed.length === 0 ? all : allowed;
   return list.includes(current) ? current : (list[Math.floor(list.length / 2)] ?? fallback);
 };
+
+/**
+ * A comparable fingerprint of a design.
+ *
+ * Only the fields the backend actually renders from: the face shape is the
+ * mannequin this browser draws on and changes no pixel of a generated
+ * photograph, so including it would report the design as changed when nothing
+ * the picture depends on has.
+ */
+function snapshot(input: {
+  texture: HairTexture;
+  length: HairLength;
+  density: HairDensity;
+  volume: number;
+  baseColor: string;
+  config: DesignConfig;
+  catalogId?: string | null;
+}): string {
+  return JSON.stringify({
+    catalogId: input.catalogId ?? null,
+    texture: input.texture,
+    length: input.length,
+    density: input.density,
+    volume: input.volume,
+    baseColor: input.baseColor.toLowerCase(),
+    config: input.config,
+  });
+}
 
 /** modelKey is stored on the design, so a saved look comes back on the same head. */
 const modelKey = (face: FaceShape) => `mannequin_${face.toLowerCase()}`;
@@ -117,8 +148,31 @@ export function Studio({
   const [name, setName] = useState(initialDesign?.name ?? '');
   const [notes, setNotes] = useState(initialDesign?.notes ?? '');
   const [savedId, setSavedId] = useState<string | null>(initialDesign?.id ?? null);
+  const [savedName, setSavedName] = useState(initialDesign?.name ?? '');
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  /**
+   * WHAT WAS LAST SAVED, SO "CHANGED SINCE" IS A FACT RATHER THAN A GUESS.
+   *
+   * A photographic preview is drawn from the SAVED design, on a server, from a
+   * row — not from whatever the sliders say right now. Without this, moving the
+   * colour and pressing the button spends real money rendering the PREVIOUS
+   * version of the look, and nothing about the returned picture says so.
+   */
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(() =>
+    /*
+     * Taken from the RESOLVED state rather than from initialDesign directly. A
+     * design whose style has since been deleted comes back on a different style,
+     * and fingerprinting the row would then report "changed" the moment the
+     * screen opened, before anybody touched a slider.
+     */
+    initialDesign ? snapshot({ ...state, catalogId: state.catalogId }) : null,
+  );
 
   const style = styles.find((item) => item.id === state.catalogId);
+
+  /** Changed since the last save. Decides what the photographic preview trusts. */
+  const dirty = savedSnapshot !== null && savedSnapshot !== snapshot({ ...state, catalogId: state.catalogId });
 
   /**
    * Changing the style re-bounds everything under it.
@@ -208,6 +262,8 @@ export function Studio({
         notes: notes.trim() || null,
       });
       setSavedId(design.id);
+      setSavedName(title);
+      setSavedSnapshot(snapshot({ ...state, catalogId: style.id }));
       setSaveOpen(false);
       toast.success(customer ? `Saved to ${customer.name}` : 'Look saved');
       router.refresh();
@@ -255,14 +311,35 @@ export function Studio({
       <div className="flex flex-col gap-4 lg:h-[calc(100vh-11rem)] lg:flex-row">
         {/* The viewport. Given the room, because it is the product. */}
         <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl border border-stone-200 bg-[#efe9e2]">
-          <Viewport
-            spec={spec}
-            face={state.face}
-            options={options}
-            view={view}
-            viewNonce={viewNonce}
-            onUserTookCamera={() => setFreeCamera(true)}
-          />
+          {/*
+            The boundary is INSIDE the layout, not around the page.
+            
+            Three throws "Error creating WebGL context" from its constructor during
+            render, which no prop can catch — and a boundary one level up would
+            still take the control panel, Save and Book down with it. Driving the
+            real page with WebGL disabled is how that was found: the whole screen
+            became "Try again".
+          */}
+          <CanvasBoundary
+            fallback={
+              <div className="flex h-full items-center justify-center p-8 text-center">
+                <p className="max-w-sm text-sm leading-relaxed text-ink-muted">
+                  This browser could not start 3D, so the preview is unavailable. It needs WebGL, which is usually
+                  switched off by a hardware-acceleration setting rather than missing — everything else on this screen
+                  still works, including saving the look and booking it.
+                </p>
+              </div>
+            }
+          >
+            <Viewport
+              spec={spec}
+              face={state.face}
+              options={options}
+              view={view}
+              viewNonce={viewNonce}
+              onUserTookCamera={() => setFreeCamera(true)}
+            />
+          </CanvasBoundary>
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-1.5 p-3">
             {(Object.keys(VIEWS) as ViewName[]).map((name) => (
@@ -312,6 +389,48 @@ export function Studio({
             </Button>
           </div>
 
+          {/*
+            THE PHOTOGRAPH, ON ITS OWN ROW AND SECOND.
+            
+            Not beside Save and Book: those two are what the studio is FOR —
+            agreeing a shape and turning it into an appointment — and both work
+            offline, instantly, for free. This one costs money and takes a
+            minute. Putting it first would make the cheap, certain path look like
+            the afterthought.
+          */}
+          {/*
+            THE ADVISOR SITS ABOVE THE PHOTOGRAPH, AND ABOVE IN THE ORDER OF
+            OPERATIONS TOO.
+            
+            "Which cut suits her" comes before "what does it look like" in a real
+            consultation, and this one is free, instant and offline — so it is the
+            first thing offered after Save and Book.
+          */}
+          <button
+            type="button"
+            onClick={() => setAdvisorOpen(true)}
+            className="flex items-center justify-center gap-1.5 border-b border-stone-200 px-4 py-2 text-2xs font-medium text-ink-muted transition-colors hover:bg-stone-50 hover:text-ink"
+          >
+            <Wand2 className="h-3.5 w-3.5" aria-hidden />
+            What would suit {customer ? customer.name.split(' ')[0] : 'her'}?
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!savedId) {
+                toast.error('Save the look first — the picture is drawn from the saved design.');
+                return;
+              }
+              setPhotoOpen(true);
+            }}
+            className="flex items-center justify-center gap-1.5 border-b border-stone-200 px-4 py-2 text-2xs font-medium text-ink-muted transition-colors hover:bg-stone-50 hover:text-ink"
+          >
+            <Camera className="h-3.5 w-3.5" aria-hidden />
+            See it on a model
+            {dirty && savedId ? <span className="text-amber-700">· unsaved changes</span> : null}
+          </button>
+
           {style.service ? (
             <p className="border-b border-stone-200 px-4 py-2 text-2xs text-ink-subtle">
               {style.service.name} &middot; {money(style.service.price)} &middot; {style.service.durationMin} min
@@ -329,6 +448,42 @@ export function Studio({
           </div>
         </div>
       </div>
+
+      <Advisor
+        open={advisorOpen}
+        onClose={() => setAdvisorOpen(false)}
+        styles={styles}
+        customer={customer}
+        onChoose={({ catalogId, texture, length }) => {
+          /*
+           * The chosen style, plus whatever the reading already knows.
+           *
+           * Pushed through the same `change` that the control panel uses, so the
+           * texture and length coming out of the advisor get re-bounded by what
+           * the style actually supports — a recommendation must not be able to
+           * put the configurator into a state it would refuse to save.
+           */
+          const picked = styles.find((item) => item.id === catalogId);
+          if (!picked) return;
+          change({
+            ...state,
+            catalogId,
+            texture: texture ?? state.texture,
+            length: length ?? state.length,
+          });
+          setAdvisorOpen(false);
+          toast.success(`Opened ${picked.name} in the studio`);
+        }}
+      />
+
+      <PhotoPreview
+        open={photoOpen}
+        onClose={() => setPhotoOpen(false)}
+        designId={savedId}
+        designName={savedName}
+        customerId={customer?.id ?? null}
+        dirty={dirty}
+      />
 
       <Modal
         open={saveOpen}
