@@ -92,6 +92,20 @@ export interface Hairstyle {
   skinTone: SkinTone | null;
   /** True when the salon uploaded the picture rather than generating it. */
   photoIsUploaded: boolean;
+
+  /**
+   * THE SEVEN AXES. Null everywhere means "not described yet", which is normal and
+   * not an error: a salon puts a style on the menu long before it decides how to
+   * describe it on seven axes, and a half-filled catalogue beats an empty one.
+   */
+  cutFamily: string | null;
+  fringe: string | null;
+  finish: string | null;
+  baseColorKey: string | null;
+  colorTechnique: string | null;
+  colorPlacement: string | null;
+  desiredLooks: string[];
+  occasions: string[];
   /**
    * How many saved looks in THIS salon use this style.
    *
@@ -168,3 +182,187 @@ export const GENDER_LABELS: Record<HairGender, string> = {
   MALE: 'Men',
   UNISEX: 'Anyone',
 };
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * THE SEVEN AXES A LOOK IS MADE OF.
+ *
+ * Mirrors `look-dimensions.ts` on the server, which owns the values AND the rules
+ * between them — notably which placements a technique admits, which this file
+ * also carries because a UI that offers an illegal pair and lets the API refuse
+ * it is a UI that teaches people not to trust it.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export const CUT_FAMILY_LABELS: Record<string, string> = {
+  BOB: 'Bob',
+  LOB: 'Lob',
+  LAYERS: 'Layers',
+  BUTTERFLY: 'Butterfly',
+  U_CUT: 'U-cut',
+  V_CUT: 'V-cut',
+  WOLF: 'Wolf cut',
+  PIXIE: 'Pixie',
+  SHAG: 'Shag',
+  BLUNT: 'Blunt',
+  ONE_LENGTH: 'One length',
+  FADE: 'Fade',
+  TAPER: 'Taper',
+  UNDERCUT: 'Undercut',
+  CROP: 'Crop',
+  QUIFF: 'Quiff',
+  POMPADOUR: 'Pompadour',
+  BUZZ: 'Buzz cut',
+};
+
+export const FRINGE_LABELS: Record<string, string> = {
+  NONE: 'No fringe',
+  CURTAIN: 'Curtain',
+  BOTTLENECK: 'Bottleneck',
+  FULL: 'Full fringe',
+  SIDE_SWEPT: 'Side-swept',
+  WISPY: 'Wispy',
+  MICRO: 'Micro',
+};
+
+/**
+ * HOW THE HAIR IS WORN — not the customer's own texture.
+ *
+ * Those were one word for a long time and it is the collision most worth keeping
+ * apart: `supportedTextures` is whose hair the cut works on, this is what the
+ * finished head looks like, and the distance between them is a service with a
+ * price.
+ */
+export const FINISH_LABELS: Record<string, string> = {
+  SLEEK: 'Sleek',
+  STRAIGHT: 'Straight',
+  BLOWOUT: 'Blowout',
+  SOFT_WAVES: 'Soft waves',
+  BEACH_WAVES: 'Beach waves',
+  CURLS: 'Curls',
+  DEFINED_CURLS: 'Defined curls',
+  TEXTURED: 'Textured',
+};
+
+export const BASE_COLOR_LABELS: Record<string, string> = {
+  BLACK: 'Black',
+  SOFT_BLACK: 'Soft black',
+  ESPRESSO: 'Espresso',
+  DARK_BROWN: 'Dark brown',
+  CHOCOLATE: 'Chocolate brown',
+  CHESTNUT: 'Chestnut',
+  CARAMEL: 'Caramel',
+  COPPER: 'Copper',
+  BURGUNDY: 'Burgundy',
+  DARK_BLONDE: 'Dark blonde',
+  BLONDE: 'Blonde',
+  LIGHT_BLONDE: 'Light blonde',
+  PLATINUM: 'Platinum',
+  GREY: 'Grey / silver',
+  FASHION: 'Fashion shade',
+};
+
+export const TECHNIQUE_LABELS: Record<string, string> = {
+  GLOBAL: 'Global colour',
+  ROOT: 'Root colour',
+  HIGHLIGHTS: 'Highlights',
+  LOWLIGHTS: 'Lowlights',
+  BABYLIGHTS: 'Babylights',
+  BALAYAGE: 'Balayage',
+  OMBRE: 'Ombré',
+  COLOR_MELT: 'Colour melt',
+};
+
+export const PLACEMENT_LABELS: Record<string, string> = {
+  FULL: 'All over',
+  ROOTS: 'Roots',
+  CROWN: 'Crown',
+  FACE_FRAMING: 'Face framing',
+  MONEY_PIECE: 'Money piece',
+  MIDS_TO_ENDS: 'Mid-lengths to ends',
+  ENDS: 'Ends',
+  UNDERLAYER: 'Underlayer',
+  HIDDEN: 'Hidden',
+  PANELS: 'Panels',
+};
+
+/**
+ * TECHNIQUE × PLACEMENT IS NOT A GRID — about half the cross-product names
+ * nothing a colourist could do.
+ *
+ * Duplicated from the server on purpose. The alternative is a placement dropdown
+ * showing all ten and an API that refuses six of them, which is how a
+ * professional tool loses the professionals using it in the first five minutes.
+ */
+export const PLACEMENTS_FOR_TECHNIQUE: Record<string, string[]> = {
+  GLOBAL: ['FULL'],
+  ROOT: ['ROOTS'],
+  HIGHLIGHTS: ['FULL', 'CROWN', 'FACE_FRAMING', 'MONEY_PIECE', 'UNDERLAYER', 'HIDDEN', 'PANELS'],
+  LOWLIGHTS: ['FULL', 'CROWN', 'UNDERLAYER', 'PANELS'],
+  BABYLIGHTS: ['FULL', 'CROWN', 'FACE_FRAMING', 'MONEY_PIECE'],
+  BALAYAGE: ['MIDS_TO_ENDS', 'ENDS', 'FACE_FRAMING', 'FULL', 'PANELS'],
+  OMBRE: ['ENDS', 'MIDS_TO_ENDS'],
+  COLOR_MELT: ['FULL', 'MIDS_TO_ENDS'],
+};
+
+export const DESIRED_LOOK_LABELS: Record<string, string> = {
+  NATURAL: 'Natural',
+  MODERN: 'Modern',
+  BOLD: 'Bold',
+  ELEGANT: 'Elegant',
+  TRENDY: 'Trendy',
+  PROFESSIONAL: 'Professional',
+  EDGY: 'Edgy',
+};
+
+export const OCCASION_LABELS: Record<string, string> = {
+  EVERYDAY: 'Everyday',
+  OFFICE: 'Office',
+  PARTY: 'Party',
+  WEDDING: 'Wedding',
+  BRIDAL: 'Bridal',
+  VACATION: 'Vacation',
+  PHOTOSHOOT: 'Photoshoot',
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * THE ANGLES — a property of the PICTURE, not of the look.
+ *
+ * The same cut photographed from four sides is one look, one price, one booking.
+ * Filing poses among the seven axes would multiply the library by five and mean
+ * nothing.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export type HairPose = 'FRONT' | 'THREE_QUARTER' | 'SIDE' | 'BACK' | 'TOP';
+
+export const POSE_LABELS: Record<HairPose, string> = {
+  FRONT: 'Front',
+  THREE_QUARTER: 'Three-quarter',
+  SIDE: 'Side',
+  BACK: 'Back',
+  TOP: 'Top',
+};
+
+/** What each angle is actually for, shown where somebody is deciding to shoot it. */
+export const POSE_WHY: Record<HairPose, string> = {
+  FRONT: 'What she sees in a mirror. The look-book thumbnail, and what the studio recolours.',
+  THREE_QUARTER: 'Shows the cut as a shape. One picture, the most information.',
+  SIDE: 'Length, layers and the line at the jaw — where a bob is right or wrong.',
+  BACK: 'The graduation, the V or U, the fade. What she cannot see on herself.',
+  TOP: 'The crown and the parting. Mostly for density and thinning work.',
+};
+
+export interface HairstylePhoto {
+  id: string;
+  pose: HairPose;
+  imageUrl: string;
+  maskUrl: string | null;
+  isUploaded: boolean;
+  consentAt: string | null;
+}
+
+/** `GET /hairstyles/:id/photos` — the angles it has, and the ones it still owes. */
+export interface PhotoChecklist {
+  wanted: HairPose[];
+  extra: HairPose[];
+  missing: HairPose[];
+  photos: HairstylePhoto[];
+}

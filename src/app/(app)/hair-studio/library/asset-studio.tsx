@@ -11,8 +11,18 @@ import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
 import { MaskEditor } from './mask-editor';
+import { Poses } from './poses';
 import {
+  BASE_COLOR_LABELS,
   COLOR_FAMILY_LABELS,
+  CUT_FAMILY_LABELS,
+  DESIRED_LOOK_LABELS,
+  FINISH_LABELS,
+  FRINGE_LABELS,
+  OCCASION_LABELS,
+  PLACEMENTS_FOR_TECHNIQUE,
+  PLACEMENT_LABELS,
+  TECHNIQUE_LABELS,
   DENSITY_LABELS,
   FACE_SHAPE_LABELS,
   GENDER_LABELS,
@@ -314,6 +324,32 @@ function StyleDrawer({
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // The seven axes. '' is "not recorded", which is the honest default and is sent
+  // to the API as null rather than as an empty string.
+  const [cutFamily, setCutFamily] = useState(style.cutFamily ?? '');
+  const [fringe, setFringe] = useState(style.fringe ?? '');
+  const [finish, setFinish] = useState(style.finish ?? '');
+  const [baseColorKey, setBaseColorKey] = useState(style.baseColorKey ?? '');
+  const [colorTechnique, setColorTechnique] = useState(style.colorTechnique ?? '');
+  const [colorPlacement, setColorPlacement] = useState(style.colorPlacement ?? '');
+  const [desiredLooks, setDesiredLooks] = useState<string[]>(style.desiredLooks ?? []);
+  const [occasions, setOccasions] = useState<string[]>(style.occasions ?? []);
+
+  /*
+   * How much of the description exists, which decides whether the section opens.
+   * A style somebody has started describing is one they are working on; a style
+   * with nothing recorded should not greet them with seven empty dropdowns.
+   */
+  const describedCount = [
+    cutFamily,
+    fringe,
+    finish,
+    baseColorKey,
+    colorTechnique,
+    colorPlacement,
+    desiredLooks.length ? 'y' : '',
+  ].filter(Boolean).length;
+
   // What to draw. Defaults chosen by the server when these are left alone.
   const [texture, setTexture] = useState<HairTexture | ''>('');
   const [length, setLength] = useState<HairLength | ''>('');
@@ -376,6 +412,14 @@ function StyleDrawer({
         isActive,
         colorFamily: colorFamily || null,
         skinTone: skinTone || null,
+        cutFamily: cutFamily || null,
+        fringe: fringe || null,
+        finish: finish || null,
+        baseColorKey: baseColorKey || null,
+        colorTechnique: colorTechnique || null,
+        colorPlacement: colorPlacement || null,
+        desiredLooks,
+        occasions,
         supportedTextures,
         supportedLengths,
         supportedDensities,
@@ -558,6 +602,99 @@ function StyleDrawer({
             </Field>
           </div>
 
+          {/*
+            ════════════════════════════════════════════════════════════════════
+            WHAT THIS LOOK IS, ON THE SEVEN AXES.
+
+            Folded away because it is a description rather than a decision: a
+            style works, sells and books with every one of these unset, and
+            opening the drawer on seven empty dropdowns would make the common job
+            — rename it, price it, give it a picture — look like the hard one.
+
+            What they buy is the recommendation engine. "Butterfly / long /
+            curtain / soft waves / chocolate / balayage / face-framing" is enough
+            for the advisor to match a look to a reading, and to tell a customer
+            what it will cost her in visits and in weeks before she agrees to it.
+            ════════════════════════════════════════════════════════════════════
+          */}
+          <details className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2" open={describedCount > 0}>
+            <summary className="cursor-pointer text-2xs font-medium text-ink-muted">
+              What this look is{' '}
+              <span className="font-normal text-ink-subtle">
+                · {describedCount} of 7 recorded{describedCount === 0 ? ' — optional' : ''}
+              </span>
+            </summary>
+
+            <div className="mt-3 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <Axis label="Haircut" value={cutFamily} onChange={setCutFamily} labels={CUT_FAMILY_LABELS} />
+                <Axis label="Fringe" value={fringe} onChange={setFringe} labels={FRINGE_LABELS} />
+                <Axis
+                  label="Finish"
+                  hint="How it is worn — not her own texture"
+                  value={finish}
+                  onChange={setFinish}
+                  labels={FINISH_LABELS}
+                />
+                <Axis label="Base colour" value={baseColorKey} onChange={setBaseColorKey} labels={BASE_COLOR_LABELS} />
+                <Axis
+                  label="Technique"
+                  value={colorTechnique}
+                  onChange={(next) => {
+                    setColorTechnique(next);
+                    /*
+                     * THE PLACEMENT IS CLEARED WHEN THE TECHNIQUE CHANGES.
+                     *
+                     * Because about half of technique × placement names nothing a
+                     * colourist could do: switching from balayage to global with
+                     * "ends" still selected leaves an invalid pair on screen that
+                     * the API refuses on save. Clearing is honest; silently
+                     * remapping would put a value there nobody chose.
+                     */
+                    if (next && colorPlacement && !(PLACEMENTS_FOR_TECHNIQUE[next] ?? []).includes(colorPlacement)) {
+                      setColorPlacement('');
+                    }
+                  }}
+                  labels={TECHNIQUE_LABELS}
+                />
+                <Axis
+                  label="Placement"
+                  value={colorPlacement}
+                  onChange={setColorPlacement}
+                  /*
+                   * Only the placements this technique admits. A dropdown of all
+                   * ten with an API that refuses six is how a professional tool
+                   * loses the professionals using it.
+                   */
+                  labels={
+                    colorTechnique
+                      ? Object.fromEntries(
+                          (PLACEMENTS_FOR_TECHNIQUE[colorTechnique] ?? []).map((key) => [key, PLACEMENT_LABELS[key]!]),
+                        )
+                      : PLACEMENT_LABELS
+                  }
+                  disabled={!colorTechnique}
+                  hint={colorTechnique ? undefined : 'Pick a technique first'}
+                />
+              </div>
+
+              {/*
+                `Tags` AND NOT `Pills`, AND THE DIFFERENCE IS NOT COSMETIC.
+
+                `Pills` reads an empty array as ALL of them, which is right for the
+                capability rows above — a salon that has not narrowed its textures
+                has not thereby refused every texture. Here empty means NOTHING
+                RECORDED. Using Pills would light up all seven as chosen on a style
+                nobody has described, and then save that as fact.
+              */}
+              <Tags label="Reads as" labels={DESIRED_LOOK_LABELS} value={desiredLooks} onChange={setDesiredLooks} />
+              <Tags label="Suits" labels={OCCASION_LABELS} value={occasions} onChange={setOccasions} />
+              <p className="text-2xs leading-relaxed text-ink-subtle">
+                Occasion ranks the <em>finish</em> rather than the cut — the same lob goes to an office and to a wedding.
+              </p>
+            </div>
+          </details>
+
           <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-muted">
             <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
             Offered — shown in the studio, the advisor and the look-book
@@ -731,6 +868,18 @@ function StyleDrawer({
             and it is this salon&rsquo;s work rather than a picture of a haircut in general. Whoever is in the photograph
             needs to be happy for the salon to show it.
           </p>
+
+          {/*
+            EVERY ANGLE, AND THE ONES STILL MISSING.
+
+            Sits directly under the front view because it is the same subject —
+            and because the gap it exposes (almost always the back of the head) is
+            the one worth seeing while looking at the picture that does not show
+            it.
+          */}
+          <div className="border-t border-stone-100 pt-3">
+            <Poses catalogId={style.id} onChanged={onChanged} />
+          </div>
 
           {style.previewUrl ? (
             <button
@@ -1010,6 +1159,87 @@ function Pills<T extends string>({
             )}
           >
             {labels[option]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * ONE OF THE SEVEN AXES, OR NOT RECORDED.
+ *
+ * "Not recorded" is the first option and the default, because it is the honest
+ * state of most of a salon's catalogue and because a dropdown whose first value is
+ * already a claim collects claims nobody made.
+ */
+function Axis({
+  label,
+  hint,
+  value,
+  labels,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  labels: Record<string, string>;
+  onChange: (next: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Field label={label} hint={hint}>
+      {({ id }) => (
+        <Select id={id} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+          <option value="">Not recorded</option>
+          {Object.entries(labels).map(([key, text]) => (
+            <option key={key} value={key}>
+              {text}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
+  );
+}
+
+/**
+ * A SET OF DESCRIPTIVE TAGS, WHERE EMPTY MEANS EMPTY.
+ *
+ * Deliberately not `Pills`, which reads an empty array as "all of them". That is
+ * right for a capability a salon narrows and wrong for a description it has not
+ * written: lighting up all seven on an undescribed style would be inventing data
+ * and then saving it.
+ */
+function Tags({
+  label,
+  labels,
+  value,
+  onChange,
+}: {
+  label: string;
+  labels: Record<string, string>;
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span className="w-16 shrink-0 text-2xs text-ink-subtle">{label}</span>
+      {Object.entries(labels).map(([key, text]) => {
+        const on = value.includes(key);
+        return (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((item) => item !== key) : [...value, key])}
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-2xs transition-colors',
+              on ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-stone-200 text-ink-subtle hover:text-ink',
+            )}
+          >
+            {text}
           </button>
         );
       })}

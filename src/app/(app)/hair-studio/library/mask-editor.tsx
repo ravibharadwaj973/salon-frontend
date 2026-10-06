@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Brush, Eraser, Undo2, Wand2 } from 'lucide-react';
 import { apiPost, errorMessage } from '@/lib/client';
+import type { HairPose } from '../catalogue-types';
 import { Button } from '@/components/ui/button';
 import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
@@ -39,6 +40,7 @@ export function MaskEditor({
   open,
   onClose,
   catalogId,
+  pose,
   photoUrl,
   existingMaskUrl,
   onSaved,
@@ -46,6 +48,15 @@ export function MaskEditor({
   open: boolean;
   onClose: () => void;
   catalogId: string;
+  /**
+   * WHICH ANGLE IS BEING CUT OUT. Absent means the front one.
+   *
+   * A mask belongs to one photograph and cannot be shared: hair occupies
+   * completely different pixels from the side than from the front, so sending a
+   * side mask to the front slot would paint colour onto a cheek — and do it
+   * convincingly enough to ship.
+   */
+  pose?: HairPose;
   photoUrl: string;
   existingMaskUrl: string | null;
   onSaved: () => void;
@@ -294,7 +305,10 @@ export function MaskEditor({
 
       // PNG, not JPEG. A mask is a hard-edged greyscale silhouette and JPEG's
       // ringing around those edges would appear in the recolour as a halo.
-      await apiPost(`hair-studio/hairstyles/${catalogId}/mask`, { mask: canvas.toDataURL('image/png') });
+      await apiPost(`hair-studio/hairstyles/${catalogId}/mask`, {
+        mask: canvas.toDataURL('image/png'),
+        ...(pose ? { pose } : {}),
+      });
       toast.success('Hair cut out — every colour is instant from now on');
       onSaved();
       onClose();
