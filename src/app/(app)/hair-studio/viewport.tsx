@@ -92,6 +92,7 @@ export function Viewport({
   view,
   viewNonce,
   onUserTookCamera,
+  onPick,
 }: {
   spec: DesignSpec;
   face: FaceShape;
@@ -99,6 +100,8 @@ export function Viewport({
   view: ViewName;
   viewNonce: number;
   onUserTookCamera: () => void;
+  /** Set only while the person is placing a section. See HairMesh. */
+  onPick?: (spot: { phi: number; t: number }) => void;
 }) {
   /*
    * NO onError HERE, AND THAT IS THE FIX RATHER THAN AN OMISSION.
@@ -132,7 +135,7 @@ export function Viewport({
       <Lights />
       <Salon />
       <Mannequin face={face} spec={spec} options={options} />
-      <HairMesh spec={spec} face={face} options={options} />
+      <HairMesh spec={spec} face={face} options={options} onPick={onPick} />
 
       <OrbitControls
         makeDefault

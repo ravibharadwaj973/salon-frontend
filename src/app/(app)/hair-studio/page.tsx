@@ -28,7 +28,7 @@ export const dynamic = 'force-dynamic';
 export default async function HairStudioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customer?: string; design?: string }>;
+  searchParams: Promise<{ customer?: string; design?: string; style?: string }>;
 }) {
   const params = await searchParams;
 
@@ -56,10 +56,11 @@ export default async function HairStudioPage({
             title="The studio has nothing to draw yet"
             description="It works from the cuts your salon offers. Add the standard menu and they appear here — rename, reprice or remove whatever does not suit your salon."
             /*
-             * The button rather than a link to the old Hairstyles screen.
-             * Removing that screen must not strand the studio: a salon that
-             * opens this and finds no way forward does not come back, and the
-             * admin asset studio that replaces it does not exist yet.
+             * The button rather than a link to the old Hairstyles screen, which
+             * was removed. Its replacement — the Hair library — now exists, and
+             * is linked from the header; but this button stays, because a salon
+             * that opens an empty studio and is sent somewhere else to do a
+             * setup step mostly does not come back.
              */
             action={<InstallStarter />}
           />
@@ -69,6 +70,8 @@ export default async function HairStudioPage({
           styles={list}
           customer={customer ? { id: customer.id, name: fullName(customer) } : null}
           initialDesign={design}
+          /* Lets the asset studio hand a style straight to the configurator. */
+          initialStyleId={params.style ?? null}
         />
       )}
     </>

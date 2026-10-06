@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Brush, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   DENSITY_LABELS,
@@ -14,7 +14,7 @@ import {
   type HairTexture,
   type Hairstyle,
 } from './catalogue-types';
-import type { Bangs, DesignConfig, FadeType, Intensity, Layers, Parting, Tint } from './hair/spec';
+import type { Bangs, DesignConfig, FadeType, HighlightStrip, Intensity, Layers, Parting, Tint } from './hair/spec';
 
 /**
  * WHAT A CUSTOMER MAY CHANGE, AND NOTHING ELSE.
@@ -285,14 +285,23 @@ export function Controls({
   styles,
   state,
   onChange,
+  painting = false,
+  onPaintingChange,
 }: {
   styles: Hairstyle[];
   state: StudioState;
   onChange: (next: StudioState) => void;
+  /** Whether a click on the model places a section. Owned by the studio. */
+  painting?: boolean;
+  onPaintingChange?: (painting: boolean) => void;
 }) {
   const style = styles.find((item) => item.id === state.catalogId);
   const set = (patch: Partial<StudioState>) => onChange({ ...state, ...patch });
   const setConfig = (patch: Partial<DesignConfig>) => onChange({ ...state, config: { ...state.config, ...patch } });
+  const patchStrip = (id: string, patch: Partial<HighlightStrip>) =>
+    setConfig({
+      strips: (state.config.strips ?? []).map((strip) => (strip.id === id ? { ...strip, ...patch } : strip)),
+    });
 
   // An empty list means "all of them" — the same reading the API takes, because
   // a salon that has not answered has not refused.
@@ -599,6 +608,78 @@ export function Controls({
               />
             </div>
           ) : null}
+        </div>
+      </Section>
+
+      {/*
+        HAND-PLACED SECTIONS.
+        
+        Every other control in this panel is a treatment that decides for itself
+        which locks it touches. This one is the colourist pointing at the head,
+        which is the gesture the rest of the panel cannot express — and the reason
+        it needs the 3D model rather than a form.
+      */}
+      <Section title="Painted sections" defaultOpen={false}>
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => onPaintingChange?.(!painting)}
+            aria-pressed={painting}
+            className={cn(
+              'flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+              painting
+                ? 'border-brand-300 bg-brand-600 text-white'
+                : 'border-stone-300 text-ink-muted hover:text-ink',
+            )}
+          >
+            <Brush className="h-3.5 w-3.5" aria-hidden />
+            {painting ? 'Tap the hair to place one' : 'Paint a section'}
+          </button>
+
+          <p className="text-2xs leading-relaxed text-ink-subtle">
+            {painting
+              ? 'Turn the head as usual — only a tap places a section, never a drag. Tap near the roots to colour the whole length, or nearer the ends to paint just the tips.'
+              : 'Pick out a panel of hair by hand, the way a colourist would: where it sits on the head, how wide, how bright, how softly it blends.'}
+          </p>
+
+          {(state.config.strips ?? []).map((strip, index) => (
+            <div key={strip.id} className="space-y-2 rounded-lg border border-stone-200 p-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-ink">Section {index + 1}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConfig({ strips: (state.config.strips ?? []).filter((item) => item.id !== strip.id) })
+                  }
+                  className="text-2xs text-ink-subtle hover:text-rose-700"
+                >
+                  Remove
+                </button>
+              </div>
+              <Swatches
+                value={strip.color}
+                onChange={(color) => patchStrip(strip.id, { color })}
+              />
+              <Slider label="Width" value={strip.width} onChange={(width) => patchStrip(strip.id, { width })} />
+              <Slider
+                label="Brightness"
+                value={strip.brightness}
+                onChange={(brightness) => patchStrip(strip.id, { brightness })}
+              />
+              <Slider label="Blend" value={strip.blend} onChange={(blend) => patchStrip(strip.id, { blend })} />
+              {/*
+                Where it starts along the strand is set by WHERE you tapped, and
+                adjustable afterwards — the gesture is the quick way in and the
+                slider is the way to correct it without tapping again.
+              */}
+              <Slider
+                label="Starts at"
+                value={Math.round(strip.start * 100)}
+                onChange={(value) => patchStrip(strip.id, { start: value / 100 })}
+                suffix="% down"
+              />
+            </div>
+          ))}
         </div>
       </Section>
 

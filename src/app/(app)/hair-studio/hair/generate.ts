@@ -362,6 +362,9 @@ export function generateHair(spec: DesignSpec, options: GenerateOptions = {}): H
       rLowlight: root.r1,
       rBalayage: root.r2,
       frontness: root.frontness,
+      // Where this strand grows, for hand-placed sections. Everything else here
+      // picks its locks at random; a strip is the one that was pointed at.
+      phi: root.phi,
     };
 
     const base = v;

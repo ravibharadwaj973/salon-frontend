@@ -104,3 +104,28 @@ export function hairlinePolar(phi: number): number {
   const frontness = (Math.cos(phi) + 1) / 2;
   return 2.05 - 1.0 * Math.pow(frontness, 1.6);
 }
+
+/**
+ * WHERE ON THE HEAD IS THIS POINT?
+ *
+ * Turns a point in the scene into the same two numbers the generator grows
+ * strands from: the azimuth, and how far down the scalp it sits. Those are what a
+ * hand-placed section is defined by, so the thing somebody points at and the
+ * thing that gets painted are described in one language and cannot drift apart.
+ *
+ * Taken as a DIRECTION from the head's centre rather than as a position, which is
+ * what makes it work on the hair and not only on the scalp: a lock standing ten
+ * centimetres clear of the head still points the same way from the middle of it.
+ *
+ * Lives here rather than in the component because it is pure arithmetic about the
+ * head's shape, and because a test can then reach it without rendering anything.
+ */
+export function pointToScalp(x: number, y: number, z: number): { phi: number; t: number } {
+  const length = Math.hypot(x, y, z) || 1;
+  const uy = y / length;
+  const phi = Math.atan2(x / length, z / length);
+  const theta = Math.acos(Math.max(-1, Math.min(1, uy)));
+  const max = hairlinePolar(phi);
+  const t = max <= 0 ? 1 : theta / max;
+  return { phi, t: t < 0 ? 0 : t > 1 ? 1 : t };
+}

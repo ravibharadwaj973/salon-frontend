@@ -102,15 +102,24 @@ export function Studio({
   styles,
   customer,
   initialDesign,
+  initialStyleId = null,
 }: {
   styles: Hairstyle[];
   customer: StudioCustomer | null;
   initialDesign: InitialDesign | null;
+  /** From ?style=, so the asset studio can open one straight in the chair. */
+  initialStyleId?: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
 
-  const first = styles[0];
+  /*
+   * A design in the url beats a style in the url: ?design= is a look somebody
+   * saved, ?style= is only a starting point, and opening the first and silently
+   * applying the second would show the customer a different haircut from the one
+   * the link promised.
+   */
+  const first = (initialStyleId ? styles.find((item) => item.id === initialStyleId) : null) ?? styles[0];
 
   const [state, setState] = useState<StudioState>(() => {
     const style = initialDesign?.catalogId
@@ -151,6 +160,7 @@ export function Studio({
   const [savedName, setSavedName] = useState(initialDesign?.name ?? '');
   const [photoOpen, setPhotoOpen] = useState(false);
   const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [painting, setPainting] = useState(false);
   /**
    * WHAT WAS LAST SAVED, SO "CHANGED SINCE" IS A FACT RATHER THAN A GUESS.
    *
@@ -230,6 +240,49 @@ export function Studio({
       allowFade: style?.supportsFade ?? false,
     }),
     [style?.supportsBangs, style?.supportsLayers, style?.supportsParting, style?.supportsFade],
+  );
+
+  /**
+   * A TAP ON THE HEAD BECOMES A SECTION OF COLOUR.
+   *
+   * The new section borrows the current base colour rather than defaulting to
+   * blonde: on dark hair a blonde default lands as a bright stripe that nobody
+   * asked for, and the first thing anyone does is reach for the swatch anyway.
+   * Starting from the base means the first tap changes the shape of the colour
+   * and not the colour itself, which is the easier thing to judge.
+   *
+   * `start` comes from how far down the head the tap was — tap near the crown and
+   * the whole length is coloured, tap near the ends and only the tips are. The
+   * slider in the panel corrects it afterwards.
+   */
+  const placeSection = useCallback(
+    (spot: { phi: number; t: number }) => {
+      setState((current) => {
+        const strips = current.config.strips ?? [];
+        // Six is already more sections than any colourist foils by hand, and the
+        // panel stops being scrollable past that.
+        if (strips.length >= 6) return current;
+        return {
+          ...current,
+          config: {
+            ...current.config,
+            strips: [
+              ...strips,
+              {
+                id: `strip-${Date.now().toString(36)}-${strips.length}`,
+                color: current.baseColor,
+                phi: spot.phi,
+                start: Math.max(0.05, Math.min(0.85, spot.t)),
+                width: 40,
+                brightness: 70,
+                blend: 45,
+              },
+            ],
+          },
+        };
+      });
+    },
+    [],
   );
 
   const goTo = (next: ViewName) => {
@@ -338,8 +391,25 @@ export function Studio({
               view={view}
               viewNonce={viewNonce}
               onUserTookCamera={() => setFreeCamera(true)}
+              onPick={painting ? placeSection : undefined}
             />
           </CanvasBoundary>
+
+          {/*
+            SAID OVER THE MODEL, NOT ONLY IN THE PANEL.
+            
+            Painting changes what a tap on the head does, and the head is where the
+            person is looking. A mode whose only indication is a pressed button in
+            a side panel is a mode people forget they are in, and then wonder why
+            the model keeps growing stripes.
+          */}
+          {painting ? (
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-3">
+              <span className="rounded-full bg-brand-600/95 px-3 py-1 text-2xs font-medium text-white shadow-sm">
+                Tap the hair to place a section · drag still turns the head
+              </span>
+            </div>
+          ) : null}
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-1.5 p-3">
             {(Object.keys(VIEWS) as ViewName[]).map((name) => (
@@ -444,7 +514,13 @@ export function Studio({
           )}
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <Controls styles={styles} state={state} onChange={change} />
+            <Controls
+              styles={styles}
+              state={state}
+              onChange={change}
+              painting={painting}
+              onPaintingChange={setPainting}
+            />
           </div>
         </div>
       </div>

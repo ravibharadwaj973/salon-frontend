@@ -13,6 +13,40 @@ export interface Tint {
   intensity: Intensity;
 }
 
+/**
+ * A SECTION OF HAIR THE COLOURIST PICKED OUT BY HAND.
+ *
+ * Everything else in this config is a TREATMENT — highlights, balayage, a money
+ * piece — and every treatment decides for itself which locks it touches, either
+ * at random or by a rule about the front of the head. A strip is the opposite:
+ * somebody pointed at the head and said "this bit".
+ *
+ * That is why it carries an angle rather than an intensity. `phi` is where on the
+ * head it sits, taken from the point on the model that was clicked, and it is the
+ * one piece of colour here that cannot be expressed as a preset.
+ */
+export interface HighlightStrip {
+  id: string;
+  color: string;
+  /** Azimuth of the section's centre, radians. 0 faces the mirror. */
+  phi: number;
+  /**
+   * Where along the strand the colour starts — 0 at the root, 1 at the tip.
+   *
+   * Taken from how far DOWN the head the person clicked, which is how the
+   * control stays a single gesture: click near the crown and the section is
+   * coloured from the roots, click near the ends and only the tips are painted.
+   * That is also how it is done in the chair.
+   */
+  start: number;
+  /** How wide the section is, 0-100. */
+  width: number;
+  /** How far the colour replaces the base, 0-100. */
+  brightness: number;
+  /** How softly the edges fade into the hair around them, 0-100. */
+  blend: number;
+}
+
 export interface DesignConfig {
   highlights?: Tint;
   lowlights?: Tint;
@@ -26,6 +60,8 @@ export interface DesignConfig {
   faceFramingLayers?: number;
   parting: Parting;
   fade?: { type: FadeType; guard: 0 | 0.5 | 1 | 2 | 3; topLength: number };
+  /** Hand-placed sections. See HighlightStrip. */
+  strips?: HighlightStrip[];
 }
 
 /**
@@ -46,6 +82,16 @@ export interface DesignSpec {
   baseColor: string;
   config: DesignConfig;
 }
+
+/**
+ * The widest a single section may be, in radians of the head.
+ *
+ * About forty degrees at 100. Wider than that stops being a section and becomes
+ * "half the head is a different colour", which is a base colour change and has
+ * its own control. Shared between the painter and the UI so a slider at 50 means
+ * the same thing in both.
+ */
+export const STRIP_MAX_HALF_ANGLE = 0.36;
 
 export const DEFAULT_CONFIG: DesignConfig = {
   bangs: 'NONE',

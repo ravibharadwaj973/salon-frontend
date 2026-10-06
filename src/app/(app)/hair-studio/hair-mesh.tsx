@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { FaceShape } from './catalogue-types';
 import { generateHair, type GenerateOptions } from './hair/generate';
+import { pointToScalp } from './hair/head-shape';
 import type { DesignSpec } from './hair/spec';
 
 /**
@@ -22,10 +23,20 @@ export function HairMesh({
   spec,
   face,
   options,
+  onPick,
 }: {
   spec: DesignSpec;
   face: FaceShape;
   options: GenerateOptions;
+  /**
+   * Called with the spot on the head somebody pointed at, when painting is on.
+   *
+   * Undefined switches the pointer handlers off entirely rather than leaving them
+   * attached and ignoring the events: a mesh with pointer handlers takes part in
+   * raycasting on every frame the pointer moves, and this one is three thousand
+   * ribbons.
+   */
+  onPick?: (spot: { phi: number; t: number }) => void;
 }) {
   const ref = useRef<THREE.BufferGeometry>(null);
 
@@ -52,8 +63,43 @@ export function HairMesh({
     geometry.computeBoundingSphere();
   }, [data]);
 
+  /**
+   * A CLICK, NOT A DRAG — and the difference is the whole interaction.
+   *
+   * The orbit controls own the same pointer: every rotation of the head starts
+   * with a press on the hair and ends with a release on it. Treating a release as
+   * a tap would put a stripe of colour on the model every time somebody turned it
+   * round to look at the back, which is the most common gesture on this screen.
+   *
+   * So the press position is remembered and the release only counts if the
+   * pointer has barely moved. Five pixels is wide enough to forgive a hand on a
+   * tablet and narrow enough that no deliberate drag gets through.
+   */
+  const pressed = useRef<{ x: number; y: number } | null>(null);
+
+  const handlers = onPick
+    ? {
+        onPointerDown: (event: { clientX: number; clientY: number }) => {
+          pressed.current = { x: event.clientX, y: event.clientY };
+        },
+        onPointerUp: (event: {
+          clientX: number;
+          clientY: number;
+          point: THREE.Vector3;
+          stopPropagation: () => void;
+        }) => {
+          const start = pressed.current;
+          pressed.current = null;
+          if (!start) return;
+          if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 5) return;
+          event.stopPropagation();
+          onPick(pointToScalp(event.point.x, event.point.y, event.point.z));
+        },
+      }
+    : {};
+
   return (
-    <mesh castShadow frustumCulled={false}>
+    <mesh castShadow frustumCulled={false} {...handlers}>
       <bufferGeometry ref={ref} />
       {/*
         WHY THIS IS A PHYSICAL MATERIAL AND NOT A STANDARD ONE.

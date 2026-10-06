@@ -70,6 +70,11 @@ export const NAV: NavGroup[] = [
       // The studio itself sits with the things you do WITH a customer rather
       // than with the menu you maintain once.
       { href: '/hair-studio', label: 'Hair studio', icon: Sparkles, permissions: [P.SERVICE_VIEW] },
+      // The menu BEHIND the studio: what the salon offers and the picture each
+      // style shows. Owner-level, and next to the studio rather than in Settings
+      // because it is a thing somebody comes back to while building the look-book,
+      // not a setting they touch once.
+      { href: '/hair-studio/library', label: 'Hair library', icon: Images, permissions: [P.SERVICE_MANAGE] },
       { href: '/staff', label: 'Staff', icon: Sparkles, permissions: [P.STAFF_VIEW, P.STAFF_SELF] },
     ],
   },

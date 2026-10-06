@@ -65,6 +65,15 @@ export interface Hairstyle {
   maintenance: HairMaintenance;
   serviceId: string | null;
   previewUrl: string | null;
+  /**
+   * Derived server-side from previewUrl, never stored.
+   *
+   * A second column holding the same fact drifts from the first — a picture
+   * replaced without its thumbnail updated shows last month's haircut beside this
+   * month's name, and nothing errors. Null when there is no picture, and equal to
+   * previewUrl when that picture is not one we host.
+   */
+  thumbnailUrl: string | null;
   branchId: string | null;
   isActive: boolean;
   sortOrder: number;

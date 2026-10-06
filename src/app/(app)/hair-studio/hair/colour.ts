@@ -1,4 +1,4 @@
-import type { DesignSpec, Intensity } from './spec';
+import { STRIP_MAX_HALF_ANGLE, type DesignSpec, type Intensity } from './spec';
 
 export type RGB = [number, number, number];
 
@@ -53,6 +53,31 @@ export interface StrandIdentity {
   rBalayage: number;
   /** 1 at the front of the head, 0 at the back. */
   frontness: number;
+  /**
+   * Where this strand grows, as an azimuth. Needed only by hand-placed strips —
+   * every other treatment here picks its locks at random or by frontness, and a
+   * strip is the one that was pointed at.
+   */
+  phi: number;
+}
+
+/**
+ * THE SHORTEST WAY ROUND THE HEAD.
+ *
+ * Azimuth wraps, so a section centred just past the back of the head at +3.10
+ * radians has to reach strands at -3.10 — which are eleven degrees away, not
+ * three hundred and fifty. Subtracting naively puts a hard seam down the back of
+ * every strip that crosses it, and the seam only appears when somebody paints the
+ * back of the head, which is the last place anybody looks.
+ *
+ * Exported for the test, because that is a bug nobody finds by eye.
+ */
+export function angleGap(a: number, b: number): number {
+  const TAU = Math.PI * 2;
+  let d = (a - b) % TAU;
+  if (d > Math.PI) d -= TAU;
+  if (d < -Math.PI) d += TAU;
+  return Math.abs(d);
 }
 
 /**
@@ -101,6 +126,23 @@ export function makePainter(spec: DesignSpec): (strand: StrandIdentity, s: numbe
   const moneyPiece = config.moneyPiece?.enabled ? hexToLinear(config.moneyPiece.color) : null;
   const faceFraming = config.faceFraming?.enabled ? hexToLinear(config.faceFraming.color) : null;
 
+  /*
+   * Parsed once, like everything else here. A head of three thousand strands
+   * times fifteen segments is forty-five thousand calls to the inner function,
+   * and re-reading a hex string in there would be the slowest line in the engine.
+   */
+  const strips = (config.strips ?? []).map((strip) => ({
+    color: hexToLinear(strip.color),
+    phi: strip.phi,
+    start: clamp01(strip.start),
+    half: Math.max(0.02, (strip.width / 100) * STRIP_MAX_HALF_ANGLE),
+    weight: clamp01(strip.brightness / 100),
+    // A blend of zero is still softened a little: a colour change with a
+    // perfectly hard edge down the side of a head reads as a printing error
+    // rather than as hair, and no colourist can produce one anyway.
+    soft: 0.15 + (strip.blend / 100) * 0.85,
+  }));
+
   const rootShadow = config.rootShadow?.enabled
     ? {
         color: hexToLinear(config.rootShadow.color),
@@ -140,6 +182,25 @@ export function makePainter(spec: DesignSpec): (strand: StrandIdentity, s: numbe
     }
     if (moneyPiece && strand.frontness > 0.88) {
       colour = mix(colour, moneyPiece, smoothstep(0.88, 0.98, strand.frontness));
+    }
+
+    /*
+     * HAND-PLACED SECTIONS GO ON AFTER THE TREATMENTS AND BEFORE THE ROOT SHADOW.
+     *
+     * After, because somebody who picks out a section by hand is painting over
+     * whatever the base and the highlights did — that is what the gesture means.
+     * Before the root shadow, for the same reason the highlights are: a shadow is
+     * painted over finished colour to soften the regrowth line, and a strip that
+     * lifted the very root would be the thing it exists to prevent.
+     */
+    for (const strip of strips) {
+      const gap = angleGap(strand.phi, strip.phi);
+      // Across the head: full strength in the core, fading over the soft edge.
+      const across = 1 - smoothstep(strip.half, strip.half * (1 + strip.soft), gap);
+      if (across <= 0) continue;
+      // Along the strand: nothing above where it was painted, full below.
+      const along = smoothstep(strip.start, Math.min(1, strip.start + 0.18), s);
+      colour = mix(colour, strip.color, strip.weight * across * along);
     }
 
     /*

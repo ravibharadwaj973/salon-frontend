@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateHair, rootPool, strandLength, type Root } from '../src/app/(app)/hair-studio/hair/generate';
-import { hairlinePolar, headRadius } from '../src/app/(app)/hair-studio/hair/head-shape';
-import { makePainter } from '../src/app/(app)/hair-studio/hair/colour';
+import { hairlinePolar, headRadius, pointToScalp } from '../src/app/(app)/hair-studio/hair/head-shape';
+import { angleGap, makePainter } from '../src/app/(app)/hair-studio/hair/colour';
 import { DEFAULT_CONFIG, SEGMENTS, type DesignSpec } from '../src/app/(app)/hair-studio/hair/spec';
 
 /**
@@ -267,7 +267,7 @@ describe('the mesh it hands to the renderer', () => {
 });
 
 describe('colour along a strand', () => {
-  const strand = { rHighlight: 0.9, rLowlight: 0.9, rBalayage: 0.9, frontness: 0.1 };
+  const strand = { rHighlight: 0.9, rLowlight: 0.9, rBalayage: 0.9, frontness: 0.1, phi: 0 };
 
   it('leaves the base colour alone when nothing is applied', () => {
     const paint = makePainter(spec());
@@ -316,5 +316,159 @@ describe('colour along a strand', () => {
     expect(paint({ ...strand, frontness: 0.99 }, 0.5)[0]).toBeGreaterThan(
       paint({ ...strand, frontness: 0.2 }, 0.5)[0],
     );
+  });
+});
+
+describe('hand-placed sections', () => {
+  const at = (phi: number) => ({ rHighlight: 0.9, rLowlight: 0.9, rBalayage: 0.9, frontness: 0.1, phi });
+
+  const painted = (phi: number, over = {}) =>
+    makePainter(
+      spec({
+        baseColor: '#2E211C',
+        config: {
+          ...DEFAULT_CONFIG,
+          strips: [
+            { id: 's1', color: '#F2E2C4', phi, start: 0.2, width: 50, brightness: 100, blend: 20, ...over },
+          ],
+        },
+      }),
+    );
+
+  it('colours the section that was pointed at', () => {
+    const paint = painted(0);
+    expect(paint(at(0), 1)[0]).toBeGreaterThan(paint(at(0), 0)[0] + 0.1);
+  });
+
+  it('leaves the other side of the head alone', () => {
+    const paint = painted(0);
+    const base = makePainter(spec({ baseColor: '#2E211C', config: DEFAULT_CONFIG }));
+    expect(paint(at(Math.PI), 1)).toEqual(base(at(Math.PI), 1));
+  });
+
+  /**
+   * Azimuth wraps. A section centred just past the back of the head at +3.10
+   * radians has to reach strands at -3.10, which are eleven degrees away and not
+   * three hundred and fifty — and the seam a naive subtraction leaves only shows
+   * up on the back of the head, which is the last place anybody looks.
+   */
+  it('reaches across the wrap at the back of the head', () => {
+    const paint = painted(3.10);
+    const near = paint(at(-3.10), 1)[0];
+    const base = makePainter(spec({ baseColor: '#2E211C', config: DEFAULT_CONFIG }))(at(-3.10), 1)[0];
+    expect(near).toBeGreaterThan(base + 0.05);
+  });
+
+  it('starts where it was painted and not at the root', () => {
+    const paint = painted(0, { start: 0.6 });
+    expect(paint(at(0), 0.2)[0]).toBeLessThan(paint(at(0), 0.95)[0]);
+  });
+
+  it('is wider when the width is', () => {
+    const edge = 0.3;
+    const narrow = painted(0, { width: 20 })(at(edge), 1)[0];
+    const wide = painted(0, { width: 90 })(at(edge), 1)[0];
+    expect(wide).toBeGreaterThan(narrow);
+  });
+
+  it('is weaker when the brightness is', () => {
+    expect(painted(0, { brightness: 30 })(at(0), 1)[0]).toBeLessThan(painted(0, { brightness: 100 })(at(0), 1)[0]);
+  });
+
+  /**
+   * A colour change with a perfectly hard edge down the side of a head reads as a
+   * printing error rather than as hair, and no colourist can produce one anyway.
+   */
+  it('never leaves a perfectly hard edge, even at blend zero', () => {
+    const paint = painted(0, { width: 50, blend: 0 });
+    const half = 0.5 * 0.36;
+    expect(paint(at(half * 1.05), 1)[0]).toBeGreaterThan(paint(at(half * 1.3), 1)[0]);
+  });
+
+  it('stacks two sections without either cancelling the other', () => {
+    const paint = makePainter(
+      spec({
+        baseColor: '#2E211C',
+        config: {
+          ...DEFAULT_CONFIG,
+          strips: [
+            { id: 'a', color: '#F2E2C4', phi: -0.8, start: 0.2, width: 40, brightness: 100, blend: 20 },
+            { id: 'b', color: '#F2E2C4', phi: 0.8, start: 0.2, width: 40, brightness: 100, blend: 20 },
+          ],
+        },
+      }),
+    );
+    const base = makePainter(spec({ baseColor: '#2E211C', config: DEFAULT_CONFIG }));
+    expect(paint(at(-0.8), 1)[0]).toBeGreaterThan(base(at(-0.8), 1)[0] + 0.1);
+    expect(paint(at(0.8), 1)[0]).toBeGreaterThan(base(at(0.8), 1)[0] + 0.1);
+  });
+});
+
+describe('angleGap', () => {
+  it('measures the short way round', () => {
+    expect(angleGap(0, 0)).toBeCloseTo(0);
+    expect(angleGap(0.5, -0.5)).toBeCloseTo(1);
+    expect(angleGap(3.1, -3.1)).toBeCloseTo(Math.PI * 2 - 6.2, 5);
+    expect(angleGap(-3.1, 3.1)).toBeCloseTo(Math.PI * 2 - 6.2, 5);
+  });
+
+  it('never exceeds half a turn', () => {
+    for (let a = -7; a <= 7; a += 0.37) {
+      for (let b = -7; b <= 7; b += 0.53) {
+        expect(angleGap(a, b)).toBeLessThanOrEqual(Math.PI + 1e-9);
+      }
+    }
+  });
+});
+
+describe('pointToScalp — turning a tap into a place on the head', () => {
+  /**
+   * The one piece of the painting interaction a test can reach. The click-versus-
+   * drag threshold and the raycast live in the component and need a browser; this
+   * is the arithmetic, and it is where a sign error would quietly put every
+   * section on the wrong side of the head.
+   */
+  it('reads the front of the head as phi zero', () => {
+    expect(pointToScalp(0, 0.2, 1).phi).toBeCloseTo(0, 5);
+  });
+
+  it('puts the two sides on opposite signs', () => {
+    expect(pointToScalp(1, 0.2, 0).phi).toBeGreaterThan(0);
+    expect(pointToScalp(-1, 0.2, 0).phi).toBeLessThan(0);
+  });
+
+  it('reads the crown as the top of the scalp and the hairline as the bottom', () => {
+    expect(pointToScalp(0, 1, 0).t).toBeCloseTo(0, 3);
+    expect(pointToScalp(0, -1, 0).t).toBe(1);
+  });
+
+  /**
+   * Distance from the centre must not matter: a tap landing on a lock standing
+   * clear of the head has to name the same section as one landing on the scalp
+   * beneath it, or painting long hair would place colour somewhere else entirely.
+   */
+  it('ignores how far the point is from the head', () => {
+    const near = pointToScalp(0.3, 0.5, 0.8);
+    const far = pointToScalp(3, 5, 8);
+    expect(far.phi).toBeCloseTo(near.phi, 6);
+    expect(far.t).toBeCloseTo(near.t, 6);
+  });
+
+  it('stays inside nought to one everywhere, including below the chin', () => {
+    for (let x = -1; x <= 1; x += 0.21) {
+      for (let y = -1; y <= 1; y += 0.17) {
+        for (let z = -1; z <= 1; z += 0.23) {
+          if (x === 0 && y === 0 && z === 0) continue;
+          const { t, phi } = pointToScalp(x, y, z);
+          expect(t).toBeGreaterThanOrEqual(0);
+          expect(t).toBeLessThanOrEqual(1);
+          expect(Number.isFinite(phi)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('does not divide by zero at the origin', () => {
+    expect(Number.isFinite(pointToScalp(0, 0, 0).t)).toBe(true);
   });
 });
