@@ -33,17 +33,32 @@ import {
 } from '../catalogue-types';
 
 /**
- * THE ASSET PIPELINE: DRAW ONE, LOOK AT IT, PUBLISH IT.
+ * THE MENU'S PICTURES: PHOTOGRAPH THE WORK, THEN CUT THE HAIR OUT OF IT.
  *
- * The middle step is the one that makes this a studio rather than a button.
- * Generation is cheap and judgement is not — an image model draws four plausible
- * heads and one of them looks like the haircut this salon actually does — so
- * nothing is ever attached automatically. A picture becomes the menu's face only
- * when somebody picks it, and the grid behind this screen is the honest view of
- * how much of the menu still has no face at all.
+ * ── Which of the two sources leads, and why that changed ──────────────────
  *
- * Costs money, so: drawn once per style and kept, never per customer and never
- * per page view.
+ * This screen used to lead with the image model: pick a generator, draw four
+ * heads, publish the one that looks like the haircut. That was the wrong way
+ * round, and the reason is not cost.
+ *
+ * A look-book is evidence. A photograph of this salon's cutting, on this salon's
+ * customers, under this salon's lights, is evidence; a drawn stranger is an
+ * illustration of a haircut in general. Everything downstream is identical —
+ * the mask editor and the shader cannot tell where the pixels came from — so
+ * there is nothing to trade away by preferring the real one. It is also free,
+ * unlimited, and works on a server with no image-model key at all.
+ *
+ * So uploading is the path, and the drawn stand-in sits folded away below it for
+ * the honest gap: day one, thirty empty tiles, no archive. It is capped to a
+ * quarter of the day's allowance server-side, because the rest of that allowance
+ * belongs to the screen where a customer is waiting to see a cut on her own
+ * photograph — which is what the image model is actually for.
+ *
+ * ── What stays from the old design ────────────────────────────────────────
+ *
+ * Nothing is ever attached automatically, from either source. A picture becomes
+ * the menu's face only when somebody picks it, and the grid behind this screen is
+ * the honest view of how much of the menu still has no face at all.
  */
 
 type Status = 'PENDING' | 'SUBMITTED' | 'READY' | 'FAILED' | 'REFUSED';
@@ -63,6 +78,17 @@ interface GenerationStatus {
   dailyLimit: number;
   usedToday: number;
   remainingToday: number | null;
+  /**
+   * The library's own share of the day — a quarter, server-side.
+   *
+   * Reported separately because this screen must not show the whole allowance as
+   * though it were available here. The rest is reserved for consultations, and an
+   * owner who believes they have sixty pictures to spend on the menu finds out
+   * otherwise by being refused.
+   */
+  libraryLimit: number;
+  libraryUsedToday: number;
+  libraryRemainingToday: number | null;
 }
 
 const WORKING: Status[] = ['PENDING', 'SUBMITTED'];
@@ -157,11 +183,19 @@ export function AssetStudio({
           </span>
         ) : null}
 
-        {status ? (
+        {/*
+          THE LIBRARY'S SHARE, NOT THE DAY'S.
+
+          It said "4 of 60 pictures today", which read as fifty-six left for the
+          menu. Fifteen are, and the rest are held for consultations — so the
+          number shown here is the one that governs this screen, and the sentence
+          says whose the remainder is.
+        */}
+        {status?.configured ? (
           <span className="ml-auto text-2xs text-ink-subtle">
-            {status.configured
-              ? `${status.usedToday} of ${status.dailyLimit} pictures today`
-              : 'Picture generation is not switched on for this server'}
+            {status.libraryLimit === 0
+              ? `${status.libraryUsedToday} drawn today`
+              : `${status.libraryUsedToday} of ${status.libraryLimit} drawn pictures today · the rest of the day is for customers`}
           </span>
         ) : null}
       </div>
@@ -220,6 +254,7 @@ export function AssetStudio({
           style={open}
           kind={kinds.find((item) => item.key === open.kind) ?? null}
           generationReady={status?.configured ?? false}
+          libraryExhausted={status?.libraryRemainingToday === 0}
           onClose={() => setOpenId(null)}
           onChanged={() => router.refresh()}
           toast={toast}
@@ -234,6 +269,7 @@ function StyleDrawer({
   style,
   kind,
   generationReady,
+  libraryExhausted,
   onClose,
   onChanged,
   toast,
@@ -241,6 +277,15 @@ function StyleDrawer({
   style: Hairstyle;
   kind: HairstyleKind | null;
   generationReady: boolean;
+  /**
+   * Whether the look-book has spent its share of today.
+   *
+   * Shown before the button rather than discovered by pressing it — and the
+   * sentence says where the rest of the allowance went, because "limit reached"
+   * on a screen that still has an upload button that works would read as the
+   * whole feature being broken.
+   */
+  libraryExhausted: boolean;
   onClose: () => void;
   onChanged: () => void;
   toast: ReturnType<typeof useToast>;
@@ -425,7 +470,7 @@ function StyleDrawer({
       open
       onClose={onClose}
       title={style.name}
-      description={kind ? `Drawn by the ${kind.label.toLowerCase()} generator` : undefined}
+      description={kind ? `${kind.label} — ${style.photoIsUploaded ? 'your own photograph' : 'no photograph of your own yet'}` : undefined}
       size="xl"
       footer={
         <>
@@ -433,7 +478,7 @@ function StyleDrawer({
             href={`/hair-studio?style=${style.id}`}
             className="mr-auto text-2xs text-ink-subtle underline-offset-2 hover:underline"
           >
-            Open this style in the 3D studio
+            Open this style in the studio
           </Link>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
             Close
@@ -654,13 +699,11 @@ function StyleDrawer({
             half a feature.
           */}
           {/*
-            THE PHOTOGRAPH, FROM WHICHEVER SOURCE — and uploading comes first.
-            
-            A salon's own work beats anything generated, and this path needs no
-            image model, no key and no budget. The generated reference below is
-            the fallback for a style nobody has photographed yet.
+            THE PATH. Primary, first, and the only one visible without unfolding
+            something — because a photograph of this salon's own work is the better
+            picture, is free, and is unlimited. See the file header.
           */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               ref={fileRef}
               type="file"
@@ -672,20 +715,21 @@ function StyleDrawer({
                 event.target.value = '';
               }}
             />
-            <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()} loading={uploading}>
+            <Button size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
               <Upload className="h-3.5 w-3.5" />
-              {style.previewUrl ? 'Replace the photo' : 'Upload a photo'}
+              {style.previewUrl ? 'Replace the photo' : 'Upload a photo of this cut'}
             </Button>
             {style.previewUrl && style.photoIsUploaded ? (
               <Badge tone="neutral">Your own photo</Badge>
             ) : style.previewUrl ? (
-              <Badge tone="info">Generated</Badge>
+              <Badge tone="info">Drawn stand-in</Badge>
             ) : null}
           </div>
 
           <p className="text-2xs leading-relaxed text-ink-subtle">
-            Uploading one of your own cuts costs nothing and usually looks better than anything generated. Whoever is in
-            the photograph needs to be happy for the salon to show it.
+            One of your own cuts, photographed front-on in reasonable light. It costs nothing, there is no limit on it,
+            and it is this salon&rsquo;s work rather than a picture of a haircut in general. Whoever is in the photograph
+            needs to be happy for the salon to show it.
           </p>
 
           {style.previewUrl ? (
@@ -712,23 +756,66 @@ function StyleDrawer({
             </p>
           ) : null}
 
-          {!generationReady ? (
-            <p className="rounded-lg bg-stone-50 p-3 text-2xs leading-relaxed text-ink-muted">
-              Picture generation is not switched on for this server. Everything else here works — the 3D studio draws
-              every style itself, in the browser, for free.
+          {/*
+            THE STAND-IN, FOLDED AWAY.
+
+            Open by default when there is no picture at all AND nothing has been
+            drawn — the day-one case this exists for — and shut otherwise, so a
+            style with a photograph does not present a button that would replace it
+            with a drawing. The summary says what it is for rather than what it
+            does, because the mistake worth preventing is using it as the way the
+            library gets built.
+          */}
+          <details
+            open={!style.previewUrl && references.length === 0}
+            className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2"
+          >
+            <summary className="cursor-pointer text-2xs font-medium text-ink-muted">
+              No photograph of this one yet? Draw a stand-in
+            </summary>
+
+            <p className="mt-2 text-2xs leading-relaxed text-ink-subtle">
+              For a menu entry you have not photographed yet — a drawn model wearing the cut, so the tile is not empty
+              while you build the real library up. Replace it with a photograph of your own work when you have one: a
+              drawn face sells a haircut less well than evidence that you can do it.
             </p>
-          ) : (
-            <>
+
+            {!generationReady ? (
+              <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
+                Drawing is not switched on for this server, and the catalogue does not need it — upload a photograph
+                instead. Everything else here works: the studio recolours the photograph in the browser, for free.
+              </p>
+            ) : (
+            <div className="mt-3 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <Pick label="Texture" value={texture} onChange={setTexture} options={style.supportedTextures.length ? style.supportedTextures : TEXTURES} labels={TEXTURE_LABELS} />
                 <Pick label="Length" value={length} onChange={setLength} options={style.supportedLengths.length ? style.supportedLengths : LENGTHS} labels={LENGTH_LABELS} />
                 <Pick label="Face" value={face} onChange={setFace} options={style.recommendedFaceShapes.length ? style.recommendedFaceShapes : FACES} labels={FACE_SHAPE_LABELS} />
               </div>
 
-              <Button size="sm" onClick={draw} loading={drawing} disabled={!!working}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={draw}
+                loading={drawing}
+                disabled={!!working || libraryExhausted}
+                title={
+                  libraryExhausted
+                    ? 'The look-book has used its share of today — the rest of the allowance is for working with customers'
+                    : undefined
+                }
+              >
                 <Wand2 className="h-3.5 w-3.5" />
-                {references.length ? 'Draw another' : 'Draw a reference picture'}
+                {references.length ? 'Draw another' : 'Draw a stand-in'}
               </Button>
+
+              {libraryExhausted ? (
+                <p className="rounded-lg bg-amber-50 p-2.5 text-2xs leading-relaxed text-amber-900">
+                  The look-book has drawn its share of today&rsquo;s pictures. The rest of the allowance is held for
+                  working with customers, where somebody is waiting to see a cut on her own photograph. Uploading your
+                  own photographs is unlimited and carries on working.
+                </p>
+              ) : null}
 
               {working ? (
                 <div className="flex items-center gap-2 rounded-lg bg-stone-50 p-3 text-2xs text-ink-muted">
@@ -835,12 +922,14 @@ function StyleDrawer({
 
               <p className="text-2xs leading-relaxed text-ink-subtle">
                 <Badge tone="neutral">Drawn once</Badge>{' '}
-                This is the only thing here that costs a generation. Once the picture exists and the hair is cut out of
-                it, every colour, highlight and painted section in the studio is a shader — instant, and free however
-                many a customer tries.
+                This is the only thing on this screen that spends the salon&rsquo;s picture allowance, and it spends the
+                quarter of it reserved for the menu. Once a picture exists and the hair is cut out of it — drawn or
+                photographed, the studio cannot tell — every colour, highlight and painted section is a shader: instant,
+                and free however many a customer tries.
               </p>
-            </>
-          )}
+            </div>
+            )}
+          </details>
         </div>
       </div>
 

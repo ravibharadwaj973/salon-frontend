@@ -318,8 +318,8 @@ export function Studio({
             />
           ) : (
             <p className="max-w-xs p-8 text-center text-sm leading-relaxed text-stone-300">
-              This style has no photograph yet. Generate one in the Hair library — it is drawn once and then every
-              colour here is free.
+              This style has no photograph yet. Upload one of your own cuts in the Hair library — once the hair is cut
+              out of it, every colour here is free.
             </p>
           )}
 
@@ -379,9 +379,14 @@ export function Studio({
           {/*
             THE ONE CONTROL ON THIS SCREEN THAT SPENDS MONEY, and it is marked.
 
-            Everything above is a shader. This asks the image model for a new
-            picture — a different model, or the customer's own photograph — and a
+            Everything above is a shader, drawn in the browser, free however many
+            times it changes. This asks the image model for a new picture, and a
             stylist is entitled to know which clicks cost something.
+
+            NAMED AFTER THE CUSTOMER WHEN THERE IS ONE, because that is what the
+            screen behind it is for: this cut, on her own photograph. "Generate a
+            new picture" described the mechanism and hid the point — and the point
+            is the only question a customer actually asks.
           */}
           <button
             type="button"
@@ -395,7 +400,7 @@ export function Studio({
             className="flex items-center justify-center gap-1.5 border-b border-stone-200 px-4 py-2 text-2xs font-medium text-ink-muted transition-colors hover:bg-stone-50 hover:text-ink"
           >
             <Camera className="h-3.5 w-3.5" aria-hidden />
-            Generate a new picture
+            {customer ? `See this on ${customer.name.split(' ')[0]}` : 'See this on a real photo'}
             {dirty && savedId ? <span className="text-amber-700">· unsaved changes</span> : null}
           </button>
 
@@ -449,6 +454,7 @@ export function Studio({
         designId={savedId}
         designName={savedName}
         customerId={customer?.id ?? null}
+        customerName={customer?.name ?? null}
         dirty={dirty}
       />
 

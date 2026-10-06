@@ -14,20 +14,29 @@ export const dynamic = 'force-dynamic';
 /**
  * THE MENU BEHIND THE STUDIO.
  *
- * This is the screen that replaces the old Hairstyles editor, and it has a
- * different job from the one it replaces. That screen was about drawing: pick a
- * generator, tick what it supports, save. Most of that still happens here, but it
- * is no longer the point.
+ * The point of this screen is that every style the salon sells has a FACE. A
+ * look-book of names is a price list; a look-book of photographs is what a
+ * customer scrolls through while deciding to spend money, and the difference in a
+ * salon is not subtle.
  *
- * The point is that every style the salon sells has a FACE. A look-book of names
- * is a price list; a look-book of photographs is what a customer scrolls through
- * while deciding to spend money, and the difference in a salon is not subtle.
+ * ── Where those photographs come from ─────────────────────────────────────
  *
- * Those photographs are drawn once, here, and kept — never per customer and never
- * per page view. That is the whole economic shape of the feature: fifty changes
- * in the 3D configurator cost nothing because the configurator draws in the
- * browser, and an image model is asked for a picture only when a person decides
- * they want one.
+ * The salon's own camera. This is a library of the work this salon has actually
+ * done, built up one cut at a time, and it costs nothing — so there is no cap on
+ * it and no key to configure. A drawn stand-in is available for a tile nobody has
+ * photographed yet, folded away inside each style, and capped server-side to a
+ * quarter of the day.
+ *
+ * The other three quarters are reserved for the consultation screen, where the
+ * image model earns its keep: this cut, on this customer's own photograph, while
+ * she is deciding. That is the question a shader cannot answer and a drawn
+ * stranger does not address — and it is why the budget is pointed there rather
+ * than at filling in menu tiles.
+ *
+ * Either way a picture is paid for ONCE and kept. Never per customer, never per
+ * page view: every colour, highlight and painted section in the studio is a
+ * shader over the stored photograph, drawn in the browser, free however many
+ * times it changes.
  */
 export default async function HairLibraryPage() {
   const [styles, kinds] = await Promise.all([
@@ -41,7 +50,7 @@ export default async function HairLibraryPage() {
     <>
       <PageHeader
         title="Hair asset studio"
-        description="The styles your salon offers, and the picture each one shows"
+        description="The styles your salon offers, and a photograph of your own work for each one"
         action={
           <>
             <Link
@@ -66,7 +75,7 @@ export default async function HairLibraryPage() {
           <EmptyState
             icon={Scissors}
             title="No styles on the menu yet"
-            description="Add the standard menu to start from the usual thirty-odd, or add your own one at a time. Either way, rename, reprice or remove whatever does not suit your salon, then give each one a picture."
+            description="Add the standard menu to start from the usual thirty-odd, or add your own one at a time. Either way, rename, reprice or remove whatever does not suit your salon, then photograph each one as you do it."
             action={
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <InstallStarter />

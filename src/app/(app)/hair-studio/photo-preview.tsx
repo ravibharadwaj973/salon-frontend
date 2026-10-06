@@ -9,13 +9,26 @@ import { Modal, useToast } from '@/components/ui/overlay';
 import { cn } from '@/lib/cn';
 
 /**
- * THE PHOTOGRAPHIC HALF OF THE STUDIO.
+ * THIS STYLE, ON THIS CUSTOMER. THE REASON THE IMAGE MODEL IS HERE AT ALL.
  *
- * The 3D viewport answers "what shape am I asking for" — the question that goes
- * wrong in the chair. It does not answer "what will this look like on a person",
- * and a mannequin never will. This is where that second question gets an answer,
- * and it is a different kind of thing in three ways worth being honest about on
- * screen:
+ * ── What this screen is for, stated plainly ───────────────────────────────
+ *
+ * The studio answers "what colour, how dense, how glossy" by recolouring a
+ * photograph in the browser, for free, as fast as a slider moves. What it cannot
+ * answer is the question every customer actually asks — what will this look like
+ * ON ME — because the photograph it is recolouring is somebody else's head.
+ *
+ * That is the question an image model is worth paying for, and it is the only
+ * one. Not filling in the salon's menu: a photograph of the salon's own work does
+ * that better and for nothing, which is why the library screen leads with
+ * uploading and the drawn stand-in there is capped to a quarter of the day. The
+ * rest of the allowance is held for this screen, where there is somebody in the
+ * chair waiting to see herself.
+ *
+ * So the primary button here is HER OWN PHOTO, named after her, and the virtual
+ * model is the fallback for a consultation where no photograph exists.
+ *
+ * ── Three things worth being honest about on screen ───────────────────────
  *
  *   It costs money, per picture, so the salon's remaining allowance is shown
  *   BEFORE the button rather than discovered by being refused mid-consultation.
@@ -24,12 +37,13 @@ import { cn } from '@/lib/cn';
  *   returns a row and this polls it, which means a stylist can close the modal,
  *   carry on designing, and come back to a finished picture.
  *
- *   IT IS A MODEL, NOT THE CUSTOMER. Said in plain words under the picture,
- *   every time, because the single worst outcome for this feature is a customer
- *   who believes she has been shown her own face and is disappointed by her own
- *   reflection afterwards.
+ *   A VIRTUAL MODEL IS NOT THE CUSTOMER, and her own photo is a GUESS about how
+ *   the hair falls. Two different sentences for two different pictures, said
+ *   under the picture every time — because the picture is what gets turned
+ *   towards her, and the worst outcome for this feature is a customer
+ *   disappointed by her own reflection afterwards.
  *
- * ── Why a modal rather than a panel beside the 3D view ────────────────────
+ * ── Why a modal rather than a panel beside the studio ─────────────────────
  *
  * Both are pictures of a head and they compete for exactly the same attention.
  * Side by side on a salon tablet, each gets half a screen and neither is worth
@@ -60,6 +74,10 @@ interface GenerationStatus {
   dailyLimit: number;
   usedToday: number;
   remainingToday: number | null;
+  /** The share the look-book may spend on itself. Not this screen's business. */
+  libraryLimit: number;
+  libraryUsedToday: number;
+  libraryRemainingToday: number | null;
 }
 
 const WORKING: Status[] = ['PENDING', 'SUBMITTED'];
@@ -90,6 +108,7 @@ export function PhotoPreview({
   designId,
   designName,
   customerId,
+  customerName,
   dirty,
 }: {
   open: boolean;
@@ -99,6 +118,14 @@ export function PhotoPreview({
   designName: string;
   /** Needed to find her consented photo, for the preview on her own face. */
   customerId: string | null;
+  /**
+   * Her name, for the button that puts the style on her.
+   *
+   * Worth the extra prop: "Put it on Priya's photo" is the sentence that explains
+   * the whole feature without a paragraph next to it, and "Preview on her" is a
+   * control somebody has to think about before pressing.
+   */
+  customerName?: string | null;
   /**
    * Whether the design has been changed since it was last saved.
    *
@@ -125,6 +152,19 @@ export function PhotoPreview({
    * face must not outlive the permission to do so.
    */
   const [ownPhoto, setOwnPhoto] = useState<{ id: string; imageUrl: string } | null>(null);
+  /**
+   * WHAT SHE ASKED FOR THAT NO SLIDER COVERS.
+   *
+   * A menu entry plus the configurator describe a cut. A consultation is that cut
+   * plus one sentence — "keep the front long enough to tuck behind my ear",
+   * "shorter at the back than the picture" — and the list of such sentences is the
+   * whole of hairdressing, so it is a text box rather than another control.
+   *
+   * Cleared after each request on purpose: it belongs to the picture that was just
+   * asked for, and a sentence left in the box silently applying to the next one is
+   * how a stylist ends up with a picture they did not ask for.
+   */
+  const [requirement, setRequirement] = useState('');
 
   const selected = history.find((item) => item.id === selectedId) ?? history[0] ?? null;
 
@@ -212,6 +252,15 @@ export function PhotoPreview({
     try {
       const body: Record<string, unknown> = { kind, designId };
 
+      /*
+       * Not sent with a new virtual model: there is nobody in the room to have
+       * asked for anything, and the API drops it there anyway. Sending it would
+       * make this look like a free-text image generator, which it is not.
+       */
+      if (kind !== 'MODEL_PORTRAIT' && requirement.trim()) {
+        body.requirement = requirement.trim().slice(0, 200);
+      }
+
       if (kind === 'CUSTOMER_PREVIEW') {
         if (!ownPhoto) {
           toast.error('No consented photo on her record yet — add one under “What would suit her”.');
@@ -231,6 +280,7 @@ export function PhotoPreview({
       setHistory((list) => [created, ...list]);
       setSelectedId(created.id);
       setPolls(0);
+      setRequirement('');
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
@@ -240,12 +290,13 @@ export function PhotoPreview({
 
   const exhausted = status?.remainingToday === 0;
   const canEdit = !!selected && selected.status === 'READY' && !dirty;
+  const firstName = customerName?.trim().split(/\s+/)[0] ?? null;
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Photographic preview"
+      title={firstName ? `This style on ${firstName}` : 'Photographic preview'}
       description={designName ? `From the saved look “${designName}”` : undefined}
       size="lg"
       footer={
@@ -256,30 +307,6 @@ export function PhotoPreview({
                 ? `${status.usedToday} today`
                 : `${status.usedToday} of ${status.dailyLimit} today`}
             </span>
-          ) : null}
-          {/*
-            THE ONE PEOPLE ACTUALLY WANT, AND THE ONE THAT CARRIES AN OBLIGATION.
-
-            Shown only when there is a photograph on her record that she agreed
-            to — not greyed out with a tooltip, because an offer to put a
-            customer's face through an image model should not appear at all until
-            the permission exists. The API refuses it independently.
-          */}
-          {ownPhoto ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => request('CUSTOMER_PREVIEW')}
-              disabled={requesting || exhausted || dirty}
-              title={
-                dirty
-                  ? 'Save your changes first — the picture is built from the saved look'
-                  : 'Her own photo, with this hair on it. Face, clothes and background unchanged.'
-              }
-            >
-              <UserCheck className="h-3.5 w-3.5" />
-              Preview on her
-            </Button>
           ) : null}
           <Button
             size="sm"
@@ -309,15 +336,51 @@ export function PhotoPreview({
             <RefreshCw className="h-3.5 w-3.5" />
             Same model
           </Button>
+          {/*
+            THE VIRTUAL MODEL IS THE FALLBACK NOW, NOT THE HEADLINE.
+
+            It was the primary button, which quietly said the point of this screen
+            was generating stock photographs of strangers. The point is the cut on
+            the customer; a model is what you show when there is no photograph of
+            her — a walk-in, somebody who would rather not be photographed.
+          */}
           <Button
             size="sm"
+            variant={ownPhoto ? 'secondary' : 'primary'}
             onClick={() => request('MODEL_PORTRAIT')}
-            loading={requesting}
+            loading={requesting && !ownPhoto}
             disabled={!designId || exhausted || !status?.configured}
+            title="A plausible head wearing this cut — nobody real"
           >
             <UserPlus className="h-3.5 w-3.5" />
-            New model
+            {ownPhoto ? 'A model instead' : 'New model'}
           </Button>
+          {/*
+            THE ONE PEOPLE ACTUALLY WANT, AND THE ONE THAT CARRIES AN OBLIGATION.
+
+            Primary, named after her, and last — where the eye lands on a salon
+            tablet. Shown only when there is a photograph on her record that she
+            agreed to: not greyed out with a tooltip, because an offer to put a
+            customer's face through an image model should not appear at all until
+            the permission exists. The API refuses it independently, and the line
+            inside the modal says how to get there when it is missing.
+          */}
+          {ownPhoto ? (
+            <Button
+              size="sm"
+              onClick={() => request('CUSTOMER_PREVIEW')}
+              loading={requesting}
+              disabled={requesting || exhausted || dirty}
+              title={
+                dirty
+                  ? 'Save your changes first — the picture is built from the saved look'
+                  : 'Her own photo, with this hair on it. Face, clothes and background unchanged.'
+              }
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              {firstName ? `Put it on ${firstName}’s photo` : 'Put it on her photo'}
+            </Button>
+          ) : null}
         </div>
       }
     >
@@ -335,11 +398,11 @@ export function PhotoPreview({
          * An honest empty state rather than a disabled button with no reason.
          * The person reading this is usually the owner, and the fix is an env
          * variable on the server — nothing they can do from this screen, and
-         * nothing the 3D studio needs.
+         * nothing the studio's own recolouring needs.
          */
         <Blank>
           Photographic previews are not switched on for this server yet. The studio itself works without them — it
-          draws the hair in your browser, which is free and needs nothing set up.
+          recolours the photograph in your browser, which is free and needs nothing set up.
         </Blank>
       ) : (
         <div className="space-y-3">
@@ -350,7 +413,51 @@ export function PhotoPreview({
             </p>
           ) : null}
 
+          {/*
+            THE MAIN THING, MISSING, EXPLAINED — rather than silently absent.
+
+            The button that puts the style on her own photograph only exists once
+            there is a consented photograph to put it on. Before this line, that
+            meant the headline feature of the screen was invisible with nothing
+            saying why, and the only visible option was a picture of a stranger.
+            This says what is missing and where it is added, and deliberately
+            offers no shortcut: the photograph and the consent are recorded
+            together, in the reading, by somebody talking to her.
+          */}
+          {!ownPhoto ? (
+            <p className="rounded-lg border border-dashed border-stone-300 px-3 py-2 text-2xs leading-relaxed text-ink-muted">
+              {firstName
+                ? `To show this on ${firstName} herself, her photo needs to be on her record — add it under “What would suit ${firstName}?”, with her agreement. Until then this draws a virtual model wearing the cut.`
+                : 'To show this on the customer herself, pick a customer and add her photo under “What would suit her?”, with her agreement. Until then this draws a virtual model wearing the cut.'}
+            </p>
+          ) : null}
+
           <Frame generation={selected} polls={polls} />
+
+          {/*
+            ONE SENTENCE OF WHAT SHE ASKED FOR.
+
+            Under the picture rather than above it, because it is usually typed
+            after looking at one: "that, but shorter at the back". It applies to
+            the hair only — the API scopes it, and the placeholder says so by
+            example rather than by warning.
+          */}
+          <div className="space-y-1">
+            <label htmlFor="hair-requirement" className="block text-2xs font-medium text-ink-muted">
+              Anything she asked for that the sliders do not cover
+            </label>
+            <input
+              id="hair-requirement"
+              value={requirement}
+              maxLength={200}
+              onChange={(event) => setRequirement(event.target.value)}
+              placeholder="e.g. keep the front long enough to tuck behind her ear"
+              className="w-full rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-subtle focus:border-brand-400 focus:outline-none"
+            />
+            <p className="text-2xs text-ink-subtle">
+              Applied to the hair only, on the next picture. Her face, clothes and background are kept as they are.
+            </p>
+          </div>
 
           {history.length > 1 ? (
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -414,8 +521,9 @@ function Frame({ generation, polls }: { generation: Generation | null; polls: nu
   if (!generation) {
     return (
       <Blank>
-        Nothing drawn for this look yet. <strong className="font-medium text-ink">New model</strong> generates a
-        virtual model wearing it — a plausible head, not your customer&rsquo;s face.
+        Nothing drawn for this look yet. If her photo is on her record, the button on the right puts this hair on it —
+        her face, clothes and background untouched. Otherwise a virtual model wears the cut: a plausible head, not your
+        customer&rsquo;s face.
       </Blank>
     );
   }
